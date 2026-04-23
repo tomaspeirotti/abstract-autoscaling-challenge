@@ -59,6 +59,8 @@
                 <span class="cc-badge-dot"></span>
                 <span class="cc-badge-label" id="ccBadgeLabel">Synced</span>
             </span>
+            <button class="cp-btn cp-btn-sm" id="ccResetBtn" onclick="event.stopPropagation(); onConfigReset()">Reset</button>
+            <button class="cp-btn cp-btn-sm cp-btn-primary" id="ccApplyBtn" onclick="event.stopPropagation(); onConfigApply()" disabled>Apply</button>
         </header>
         <div class="cp-section-body" id="ccBody" hidden>
             <div class="cc-warning" id="ccWarning" hidden>
@@ -113,10 +115,6 @@
                 </div>
             </div>
             <div class="cc-errors" id="ccErrors"></div>
-            <div class="cc-actions">
-                <button class="cc-btn cc-btn-secondary" id="ccResetBtn" onclick="onConfigReset()">Reset</button>
-                <button class="cc-btn cc-btn-primary" id="ccApplyBtn" onclick="onConfigApply()" disabled>Apply</button>
-            </div>
         </div>
     </section>
 

@@ -11,6 +11,7 @@ def make_valid() -> ClusterConfig:
         target_memory_utilization=70,
         cpu_request_millicores=100,
         cpu_limit_millicores=500,
+        dual_stack_enabled=False,
     )
 
 
@@ -90,6 +91,19 @@ def test_request_equals_limit_is_valid():
     validate_config(cfg)
 
 
+def test_dual_stack_enabled_true_is_valid():
+    cfg = make_valid()
+    cfg.dual_stack_enabled = True
+    validate_config(cfg)
+
+
+def test_dual_stack_enabled_non_bool_fails():
+    cfg = make_valid()
+    cfg.dual_stack_enabled = "yes"  # type: ignore[assignment]
+    with pytest.raises(ValidationError, match="dual_stack_enabled"):
+        validate_config(cfg)
+
+
 from pathlib import Path
 
 from cluster_config import ClusterConfigManager
@@ -113,6 +127,7 @@ def test_get_defaults_parses_yaml():
     assert cfg.target_memory_utilization == 75
     assert cfg.cpu_request_millicores == 100
     assert cfg.cpu_limit_millicores == 500
+    assert cfg.dual_stack_enabled is False
 
 
 def test_parse_cpu_millicores_variants():

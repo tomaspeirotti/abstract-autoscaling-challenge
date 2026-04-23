@@ -11,6 +11,7 @@
     --orange: #f5a623;
     --red: #e74c4c;
     --violet: #8b7cf6;
+    --rust: #d97757;
     --blue: #4ca4f5;
     --radius: 10px;
     --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', monospace;
@@ -78,22 +79,24 @@ body {
 /* Split View */
 .split-view {
     display: grid;
-    grid-template-columns: 55% 45%;
+    grid-template-columns: 360px 1fr;
     height: calc(100vh - 48px);
     overflow: hidden;
 }
 
-.split-arch {
+.split-controls {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--surface);
 }
 
-.split-monitor {
+.split-main {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     overflow: hidden;
-    border-left: 1px solid var(--border);
+    background: var(--bg);
 }
 
 /* ==================== CONTROL PANEL ==================== */
@@ -153,9 +156,10 @@ body {
 
 .cp-row {
     display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 4px 16px 14px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 12px 16px 16px;
 }
 
 .cp-field {
@@ -189,10 +193,8 @@ body {
     box-shadow: 0 0 18px rgba(32, 228, 146, 0.4);
 }
 
-.cp-field-url { flex: 1; min-width: 260px; }
-
 .cp-field-url input[type="text"] {
-    flex: 1;
+    width: 100%;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 5px;
@@ -313,12 +315,19 @@ body {
 }
 
 
-/* Charts stack */
-.charts-stack {
+/* Charts Grid */
+.charts-grid {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 6px 12px;
+    gap: 12px;
+    padding: 16px;
+    flex: 1;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+}
+.chart-card-row {
+    display: flex;
+    gap: 12px;
     flex: 1;
     min-height: 0;
 }
@@ -335,7 +344,7 @@ body {
 }
 
 .chart-card.main {
-    flex: 2;
+    flex: 1.2;
 }
 
 .chart-card h3 {
@@ -494,8 +503,8 @@ body {
 /* Responsive */
 @media (max-width: 1200px) {
     .split-view { grid-template-columns: 1fr; height: auto; overflow: auto; }
-    .split-arch { border-bottom: 1px solid var(--border); height: 60vh; }
-    .split-monitor { border-left: none; height: 50vh; }
+    .split-controls { border-bottom: 1px solid var(--border); border-right: none; height: auto; }
+    .split-main { height: 80vh; }
     body { height: auto; overflow: auto; }
     .header-controls { flex-wrap: wrap; }
 }
@@ -657,4 +666,176 @@ body {
 .cc-btn-primary:hover:not(:disabled) {
     background: var(--accent-dim);
     border-color: var(--accent-dim);
+}
+
+/* ==================== STACK TOGGLE ==================== */
+.cc-stack-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cc-stack-row-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cc-stack-row-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.02em;
+}
+
+.cc-stack-row-hint {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+}
+
+.cc-switch {
+    position: relative;
+    width: 42px;
+    height: 22px;
+    flex-shrink: 0;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.cc-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.cc-switch-track {
+    position: absolute;
+    inset: 0;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    transition: background 0.18s, border-color 0.18s;
+}
+
+.cc-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.18s, background 0.18s;
+}
+
+.cc-switch input:checked + .cc-switch-track {
+    background: rgba(217, 119, 87, 0.18);
+    border-color: var(--rust);
+}
+
+.cc-switch input:checked + .cc-switch-track .cc-switch-thumb {
+    transform: translateX(20px);
+    background: var(--rust);
+    box-shadow: 0 0 10px rgba(217, 119, 87, 0.45);
+}
+
+.cc-switch input:disabled + .cc-switch-track {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.cc-stack-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.cc-stack-tag[data-stack="python"] {
+    background: rgba(32, 228, 146, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(32, 228, 146, 0.3);
+}
+
+.cc-stack-tag[data-stack="rust"] {
+    background: rgba(217, 119, 87, 0.14);
+    color: var(--rust);
+    border: 1px solid rgba(217, 119, 87, 0.4);
+}
+
+/* ==================== AUTOSCALING FLOW ==================== */
+.cp-flow-list {
+    list-style: none;
+    padding: 12px 16px 16px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cp-flow-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-dim);
+}
+
+.cp-flow-num {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 1px;
+}
+
+.cp-flow-num[data-kind="request"] {
+    background: rgba(32, 228, 146, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(32, 228, 146, 0.35);
+}
+
+.cp-flow-num[data-kind="metrics"] {
+    background: rgba(139, 124, 246, 0.12);
+    color: var(--violet);
+    border: 1px solid rgba(139, 124, 246, 0.35);
+}
+
+.cp-flow-num[data-kind="scaling"] {
+    background: rgba(245, 166, 35, 0.12);
+    color: var(--orange);
+    border: 1px solid rgba(245, 166, 35, 0.35);
+}
+
+.cp-flow-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.cp-flow-formula {
+    display: block;
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--orange);
+    letter-spacing: 0;
 }

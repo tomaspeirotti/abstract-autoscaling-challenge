@@ -58,25 +58,25 @@
             <div class="cc-group-title">HPA</div>
             <div class="cc-grid">
                 <label class="cc-field">
-                    <span>min replicas</span>
+                    <span title="Minimum pods the HPA keeps running, even at zero load.">min replicas</span>
                     <input type="range" id="ccMinReplicas" min="1" max="10" step="1"
                            oninput="onConfigInput('min_replicas', this.value)">
                     <span class="cc-value" id="ccMinReplicasValue"></span>
                 </label>
                 <label class="cc-field">
-                    <span>max replicas</span>
+                    <span title="Upper cap for autoscaling. The HPA will never scale beyond this, even under heavy load.">max replicas</span>
                     <input type="range" id="ccMaxReplicas" min="1" max="20" step="1"
                            oninput="onConfigInput('max_replicas', this.value)">
                     <span class="cc-value" id="ccMaxReplicasValue"></span>
                 </label>
                 <label class="cc-field">
-                    <span>target CPU %</span>
+                    <span title="Average CPU utilization (as % of the pod's CPU request) that triggers the HPA to add replicas.">target CPU %</span>
                     <input type="range" id="ccTargetCpu" min="10" max="100" step="1"
                            oninput="onConfigInput('target_cpu_utilization', this.value)">
                     <span class="cc-value" id="ccTargetCpuValue"></span>
                 </label>
                 <label class="cc-field">
-                    <span>target memory %</span>
+                    <span title="Average memory utilization (as % of the pod's memory request) that triggers scaling. Secondary signal alongside CPU.">target memory %</span>
                     <input type="range" id="ccTargetMem" min="10" max="100" step="1"
                            oninput="onConfigInput('target_memory_utilization', this.value)">
                     <span class="cc-value" id="ccTargetMemValue"></span>
@@ -87,13 +87,13 @@
             <div class="cc-group-title">Deployment</div>
             <div class="cc-grid">
                 <label class="cc-field">
-                    <span>cpu request (m)</span>
+                    <span title="Guaranteed CPU per pod in millicores (1000m = 1 core). Also the denominator for the HPA's CPU utilization math.">cpu request (m)</span>
                     <input type="range" id="ccCpuRequest" min="50" max="1000" step="10"
                            oninput="onConfigInput('cpu_request_millicores', this.value)">
                     <span class="cc-value" id="ccCpuRequestValue"></span>
                 </label>
                 <label class="cc-field">
-                    <span>cpu limit (m)</span>
+                    <span title="Hard CPU ceiling per pod. Consumption above the limit is throttled by the kernel; lower than request ≤ limit is required.">cpu limit (m)</span>
                     <input type="range" id="ccCpuLimit" min="50" max="2000" step="10"
                            oninput="onConfigInput('cpu_limit_millicores', this.value)">
                     <span class="cc-value" id="ccCpuLimitValue"></span>

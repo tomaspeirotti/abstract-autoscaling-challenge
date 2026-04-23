@@ -542,6 +542,9 @@ body {
     letter-spacing: 0.02em;
     text-transform: none;
     color: var(--text-dim);
+    cursor: help;
+    border-bottom: 1px dotted var(--border);
+    width: fit-content;
 }
 
 .cc-field input[type="range"] {

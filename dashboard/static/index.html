@@ -23,21 +23,165 @@
 <!-- Split View -->
 <div class="split-view">
 
-<!-- ==================== ARCHITECTURE (left column) ==================== -->
-<div class="split-arch">
-<div class="arch-controls">
-    <button class="btn btn-start" id="toggleBtn" onclick="toggleLoad()">Start</button>
-    <div class="slider-group">
-        <label>RPS</label>
-        <input type="range" id="rpsSlider" min="1" max="500" value="10" oninput="onRpsChange(this.value)">
-        <span class="rps-value" id="rpsValue">10</span>
-    </div>
-    <div class="url-input">
-        <label>Target</label>
-        <input type="text" id="targetUrl" value="http://localhost:8080/work" onchange="onUrlChange(this.value)">
-    </div>
+<!-- ==================== CONTROLS (left sidebar) ==================== -->
+<div class="split-controls">
+<div class="control-panel">
+
+    <!-- Section: Carga (load generator) -->
+    <section class="cp-section cp-section-load">
+        <header class="cp-section-head">
+            <span class="cp-section-title">Carga</span>
+            <span class="cp-section-hint">generador de tráfico</span>
+        </header>
+        <div class="cp-row">
+            <label class="cp-field cp-field-inline">
+                <span class="cp-field-label" data-tooltip="Requests por segundo. En modo dual se aplica a cada stack de forma independiente (cada backend recibe el RPS completo).">RPS</span>
+                <input style="flex: 1" type="range" id="rpsSlider" min="1" max="500" value="10" oninput="onRpsChange(this.value)">
+                <span class="cp-field-value" id="rpsValue">10</span>
+            </label>
+            <span class="cc-stack-row-hint" id="loadTargetHint">→ python-api</span>
+            <button class="cp-btn cp-btn-primary" style="padding: 12px; font-size: 14px; margin-top: 8px;" id="toggleBtn" onclick="toggleLoad()">Start</button>
+        </div>
+    </section>
+
+    <!-- Section: Cluster config (collapsible) -->
+    <section class="cp-section cp-section-cluster" id="clusterConfig">
+        <header class="cp-section-head cp-section-head-clickable" onclick="toggleConfigPanel()">
+            <span class="cp-toggle" id="ccToggle">▸</span>
+            <span class="cp-section-title">Cluster</span>
+            <span class="cp-spacer"></span>
+            <span class="cc-badge" id="ccBadge" data-state="synced">
+                <span class="cc-badge-dot"></span>
+                <span class="cc-badge-label" id="ccBadgeLabel">Synced</span>
+            </span>
+        </header>
+        <div class="cp-section-body" id="ccBody" hidden>
+            <div class="cc-warning" id="ccWarning" hidden>
+                ⚠ Pausá el generador de carga para editar estos valores.
+            </div>
+            <div class="cc-columns" style="grid-template-columns: 1fr; gap: 12px;">
+                <div class="cc-group">
+                    <div class="cc-group-title">Stack</div>
+                    <div class="cc-stack-row">
+                        <div class="cc-stack-row-label">
+                            <span class="cc-stack-row-title" data-tooltip="Cuando está activo, se despliega un pod Rust en paralelo al Python. La carga y la config se aplican a ambos, y los gráficos distinguen cada stack por color.">Dual stack (Python + Rust)</span>
+                            <span class="cc-stack-row-hint">
+                                <span class="cc-stack-tag" data-stack="python">Python</span>
+                                <span id="ccDualPlus" style="margin: 0 4px; color: var(--text-dim);">+</span>
+                                <span class="cc-stack-tag" data-stack="rust">Rust</span>
+                            </span>
+                        </div>
+                        <label class="cc-switch">
+                            <input type="checkbox" id="ccDualStack" onchange="onDualStackChange(this.checked)">
+                            <span class="cc-switch-track"><span class="cc-switch-thumb"></span></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="cc-group">
+                    <div class="cc-group-title">HPA</div>
+                    <div class="cc-grid" style="grid-template-columns: 1fr;">
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Pods mínimos que el HPA mantiene activos, incluso sin carga.">min replicas</span>
+                            <input type="range" id="ccMinReplicas" min="1" max="10" step="1"
+                                   oninput="onConfigInput('min_replicas', this.value)">
+                            <span class="cc-value" id="ccMinReplicasValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Techo del autoscaling. El HPA nunca escala por encima de este número, aunque haya carga alta.">max replicas</span>
+                            <input type="range" id="ccMaxReplicas" min="1" max="20" step="1"
+                                   oninput="onConfigInput('max_replicas', this.value)">
+                            <span class="cc-value" id="ccMaxReplicasValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Utilización de CPU promedio (relativa al request del pod) que gatilla al HPA a agregar replicas.">target CPU %</span>
+                            <input type="range" id="ccTargetCpu" min="10" max="100" step="1"
+                                   oninput="onConfigInput('target_cpu_utilization', this.value)">
+                            <span class="cc-value" id="ccTargetCpuValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Utilización de memoria promedio (relativa al request del pod). Señal secundaria, junto con CPU.">target memory %</span>
+                            <input type="range" id="ccTargetMem" min="10" max="100" step="1"
+                                   oninput="onConfigInput('target_memory_utilization', this.value)">
+                            <span class="cc-value" id="ccTargetMemValue"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="cc-group">
+                    <div class="cc-group-title">Deployment</div>
+                    <div class="cc-grid" style="grid-template-columns: 1fr;">
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="CPU garantizada por pod en millicores (1000m = 1 core). Además es el denominador del cálculo de utilización del HPA.">cpu request (m)</span>
+                            <input type="range" id="ccCpuRequest" min="50" max="1000" step="10"
+                                   oninput="onConfigInput('cpu_request_millicores', this.value)">
+                            <span class="cc-value" id="ccCpuRequestValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Techo duro de CPU por pod. El kernel throttlea arriba de este valor. Debe ser ≥ request.">cpu limit (m)</span>
+                            <input type="range" id="ccCpuLimit" min="50" max="2000" step="10"
+                                   oninput="onConfigInput('cpu_limit_millicores', this.value)">
+                            <span class="cc-value" id="ccCpuLimitValue"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="cc-errors" id="ccErrors"></div>
+
+            <div style="display: flex; gap: 10px; margin-top: 16px;">
+                <button class="cp-btn cp-btn-sm" style="flex: 1;" id="ccResetBtn" onclick="onConfigReset()">Reset</button>
+                <button class="cp-btn cp-btn-sm cp-btn-primary" style="flex: 2;" id="ccApplyBtn" onclick="onConfigApply()" disabled>Apply</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section: Autoscaling flow (always visible, informational) -->
+    <section class="cp-section cp-section-flow">
+        <header class="cp-section-head">
+            <span class="cp-section-title">Autoscaling</span>
+            <span class="cp-section-hint">cómo reacciona a las RPS</span>
+        </header>
+        <ol class="cp-flow-list">
+            <li><span class="cp-flow-num" data-kind="request">1</span><span class="cp-flow-text">RPS ↑ → CPU por pod aumenta</span></li>
+            <li><span class="cp-flow-num" data-kind="metrics">2</span><span class="cp-flow-text">metrics-server scrapea CPU cada ~15s</span></li>
+            <li><span class="cp-flow-num" data-kind="metrics">3</span><span class="cp-flow-text">HPA compara CPU actual vs target %</span></li>
+            <li>
+                <span class="cp-flow-num" data-kind="scaling">4</span>
+                <span class="cp-flow-text">Si supera el target, calcula pods deseados
+                    <code class="cp-flow-formula">desired = ⌈current × (currentCPU / targetCPU)⌉</code>
+                </span>
+            </li>
+            <li><span class="cp-flow-num" data-kind="scaling">5</span><span class="cp-flow-text">Deployment controller crea pods nuevos</span></li>
+            <li><span class="cp-flow-num" data-kind="request">6</span><span class="cp-flow-text">Service los suma al round-robin</span></li>
+            <li><span class="cp-flow-num" data-kind="request">7</span><span class="cp-flow-text">Carga se distribuye → CPU por pod baja</span></li>
+        </ol>
+    </section>
+
 </div>
-<div class="arch-container">
+</div><!-- /split-controls -->
+
+<!-- ==================== MAIN AREA (right column) ==================== -->
+<div class="split-main">
+
+    <!-- METRICS SECTION -->
+    <div class="charts-grid">
+        <div class="chart-card main">
+            <h3>Response Times</h3>
+            <canvas id="chartResponseTimes"></canvas>
+        </div>
+        <div class="chart-card-row">
+            <div class="chart-card">
+                <h3>Active Replicas</h3>
+                <canvas id="chartReplicas"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>CPU Utilization (avg)</h3>
+                <canvas id="chartCpu"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOPOLOGY SECTION -->
+    <div class="arch-container">
 <svg viewBox="0 0 960 680" class="arch-svg" xmlns="http://www.w3.org/2000/svg">
 <defs>
     <!-- Glow filters -->
@@ -355,25 +499,10 @@
     <div class="arch-legend-item"><div class="arch-legend-line scaling"></div> Autoscaling</div>
 </div>
 </div>
-</div><!-- /split-arch -->
+    </div>
 
-<!-- ==================== MONITORING (right column) ==================== -->
-<div class="split-monitor">
-<div class="charts-stack">
-    <div class="chart-card main">
-        <h3>Response Times</h3>
-        <canvas id="chartResponseTimes"></canvas>
-    </div>
-    <div class="chart-card">
-        <h3>Active Replicas</h3>
-        <canvas id="chartReplicas"></canvas>
-    </div>
-    <div class="chart-card">
-        <h3>CPU Utilization (avg)</h3>
-        <canvas id="chartCpu"></canvas>
-    </div>
-</div>
-</div><!-- /split-monitor -->
+
+</div><!-- /split-main -->
 
 </div><!-- /split-view -->
 
@@ -384,7 +513,45 @@
 // ============================================================
 let ws = null;
 let isRunning = false;
+let dualStackLive = false;   // reflects last-known live cluster state
+let clusterConfig = {
+    current: null,
+    defaults: null,
+    draft: null,
+    state: 'synced',   // 'synced' | 'modified' | 'applying' | 'error'
+    error: null,
+};
+const CC_RANGES = {
+    min_replicas:               [1, 10],
+    max_replicas:               [1, 20],
+    target_cpu_utilization:     [10, 100],
+    target_memory_utilization:  [10, 100],
+    cpu_request_millicores:     [50, 1000],
+    cpu_limit_millicores:       [50, 2000],
+};
+const CC_NUMERIC_FIELDS = Object.keys(CC_RANGES);
+const CC_INPUT_IDS = {
+    min_replicas:              'ccMinReplicas',
+    max_replicas:              'ccMaxReplicas',
+    target_cpu_utilization:    'ccTargetCpu',
+    target_memory_utilization: 'ccTargetMem',
+    cpu_request_millicores:    'ccCpuRequest',
+    cpu_limit_millicores:      'ccCpuLimit',
+};
+const CC_VALUE_IDS = {
+    min_replicas:              'ccMinReplicasValue',
+    max_replicas:              'ccMaxReplicasValue',
+    target_cpu_utilization:    'ccTargetCpuValue',
+    target_memory_utilization: 'ccTargetMemValue',
+    cpu_request_millicores:    'ccCpuRequestValue',
+    cpu_limit_millicores:      'ccCpuLimitValue',
+};
 const MAX_POINTS = 300;
+
+const STACK_COLORS = {
+    python: '#20e492',   // green
+    rust:   '#d97757',   // copper (Rust-brand feel, distinct from green, scaling orange, and error red)
+};
 
 // ============================================================
 //  CHART SETUP
@@ -408,16 +575,18 @@ function makeYScale(opts = {}) {
     return { beginAtZero: true, grid: { color: chartColors.grid }, ticks: { color: chartColors.text, font: { size: 10 }, ...opts } };
 }
 
+// Response Times chart: 4 datasets, but Rust ones stay hidden until dual mode is on.
 const responseTimes = new Chart(document.getElementById('chartResponseTimes'), {
     type: 'line',
     data: { datasets: [
-        { label: 'Avg', borderColor: chartColors.green, backgroundColor: chartColors.green + '15', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: true },
-        { label: 'P90', borderColor: chartColors.yellow, backgroundColor: chartColors.yellow + '10', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: false },
-        { label: 'P99', borderColor: chartColors.red, backgroundColor: chartColors.red + '10', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: false },
+        { label: 'Python avg', borderColor: STACK_COLORS.python, backgroundColor: STACK_COLORS.python + '15', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.8, fill: false },
+        { label: 'Python p99', borderColor: STACK_COLORS.python, data: [], tension: 0.4, pointRadius: 0, borderWidth: 1, borderDash: [5, 3], fill: false },
+        { label: 'Rust avg',   borderColor: STACK_COLORS.rust,   backgroundColor: STACK_COLORS.rust + '15',   data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.8, fill: false, hidden: true },
+        { label: 'Rust p99',   borderColor: STACK_COLORS.rust,   data: [], tension: 0.4, pointRadius: 0, borderWidth: 1, borderDash: [5, 3], fill: false, hidden: true },
     ]},
     options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
-        plugins: { legend: { labels: { color: chartColors.text, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: "'Inter', sans-serif" }, padding: 16 } } },
+        plugins: { legend: { labels: { color: chartColors.text, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: "'Inter', sans-serif" }, padding: 14 } } },
         scales: { ...commonScaleOpts, y: { ...makeYScale(), title: { display: true, text: 'ms', color: chartColors.text, font: { size: 10 } } } },
     },
 });
@@ -425,8 +594,10 @@ const responseTimes = new Chart(document.getElementById('chartResponseTimes'), {
 const replicasChart = new Chart(document.getElementById('chartReplicas'), {
     type: 'line',
     data: { datasets: [
-        { label: 'Running', borderColor: chartColors.green, backgroundColor: chartColors.green + '12', data: [], stepped: 'before', pointRadius: 0, borderWidth: 1.5, fill: true },
-        { label: 'Desired', borderColor: chartColors.text, data: [], stepped: 'before', pointRadius: 0, borderWidth: 1, borderDash: [5, 3], fill: false },
+        { label: 'Python running', borderColor: STACK_COLORS.python, backgroundColor: STACK_COLORS.python + '12', data: [], stepped: 'before', pointRadius: 0, borderWidth: 1.6, fill: true },
+        { label: 'Python desired', borderColor: STACK_COLORS.python, data: [], stepped: 'before', pointRadius: 0, borderWidth: 1, borderDash: [5, 3], fill: false },
+        { label: 'Rust running',   borderColor: STACK_COLORS.rust,   backgroundColor: STACK_COLORS.rust + '12',   data: [], stepped: 'before', pointRadius: 0, borderWidth: 1.6, fill: false, hidden: true },
+        { label: 'Rust desired',   borderColor: STACK_COLORS.rust,   data: [], stepped: 'before', pointRadius: 0, borderWidth: 1, borderDash: [5, 3], fill: false, hidden: true },
     ]},
     options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
@@ -438,7 +609,8 @@ const replicasChart = new Chart(document.getElementById('chartReplicas'), {
 const cpuChart = new Chart(document.getElementById('chartCpu'), {
     type: 'line',
     data: { datasets: [
-        { label: 'Avg CPU %', borderColor: chartColors.accent, backgroundColor: chartColors.accent + '12', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: true },
+        { label: 'Python CPU', borderColor: STACK_COLORS.python, backgroundColor: STACK_COLORS.python + '15', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.6, fill: true },
+        { label: 'Rust CPU',   borderColor: STACK_COLORS.rust,   backgroundColor: STACK_COLORS.rust + '15',   data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.6, fill: false, hidden: true },
     ]},
     options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
@@ -446,6 +618,17 @@ const cpuChart = new Chart(document.getElementById('chartCpu'), {
         scales: { ...commonScaleOpts, y: { ...makeYScale({ callback: v => v + '%' }), suggestedMax: 100, title: { display: true, text: '%', color: chartColors.text } } },
     },
 });
+
+function setRustSeriesVisibility(visible) {
+    // Response times datasets 2 (rust avg), 3 (rust p99)
+    responseTimes.data.datasets[2].hidden = !visible;
+    responseTimes.data.datasets[3].hidden = !visible;
+    // Replicas datasets 2, 3
+    replicasChart.data.datasets[2].hidden = !visible;
+    replicasChart.data.datasets[3].hidden = !visible;
+    // CPU dataset 1
+    cpuChart.data.datasets[1].hidden = !visible;
+}
 
 // ============================================================
 //  WEBSOCKET
@@ -456,6 +639,7 @@ function connect() {
     ws.onopen = () => {
         document.getElementById('statusDot').classList.add('connected');
         document.getElementById('statusText').textContent = 'Connected';
+        send({ action: 'get_cluster_config' });
     };
     ws.onclose = () => {
         document.getElementById('statusDot').classList.remove('connected');
@@ -468,6 +652,10 @@ function connect() {
         if (data.type === 'metrics') {
             updateDashboard(data);
             updateArchitecture(data);
+        } else if (data.type === 'cluster_config') {
+            onClusterConfigReceived(data);
+        } else if (data.type === 'cluster_config_result') {
+            onClusterConfigResult(data);
         }
     };
 }
@@ -488,16 +676,12 @@ function toggleLoad() {
 function updateToggleBtn() {
     const btn = document.getElementById('toggleBtn');
     btn.textContent = isRunning ? 'Pause' : 'Start';
-    btn.className = isRunning ? 'btn btn-pause' : 'btn btn-start';
+    btn.className = isRunning ? 'cp-btn cp-btn-pause' : 'cp-btn cp-btn-primary';
 }
 
 function onRpsChange(value) {
     document.getElementById('rpsValue').textContent = value;
     send({ action: 'set_rps', value: parseFloat(value) });
-}
-
-function onUrlChange(value) {
-    send({ action: 'set_url', value: value });
 }
 
 // ============================================================
@@ -507,20 +691,35 @@ function updateDashboard(data) {
     const now = new Date(data.timestamp * 1000);
     if (data.load.is_running !== isRunning) { isRunning = data.load.is_running; updateToggleBtn(); }
 
-    pushPoint(responseTimes, 0, now, data.response_times.avg_ms);
-    pushPoint(responseTimes, 1, now, data.response_times.p90_ms);
-    pushPoint(responseTimes, 2, now, data.response_times.p99_ms);
+    dualStackLive = !!data.load.dual_stack_enabled;
+    setRustSeriesVisibility(dualStackLive);
+
+    const py = data.response_times.python || {};
+    const rs = data.response_times.rust || {};
+    pushPoint(responseTimes, 0, now, py.avg_ms || 0);
+    pushPoint(responseTimes, 1, now, py.p99_ms || 0);
+    pushPoint(responseTimes, 2, now, rs.avg_ms || 0);
+    pushPoint(responseTimes, 3, now, rs.p99_ms || 0);
     responseTimes.update('none');
 
-    pushPoint(replicasChart, 0, now, data.cluster.replicas);
-    pushPoint(replicasChart, 1, now, data.cluster.hpa_desired);
+    const pyC = data.cluster.python || { replicas: 0, hpa_desired: 0, pods: [] };
+    const rsC = data.cluster.rust   || { replicas: 0, hpa_desired: 0, pods: [] };
+    pushPoint(replicasChart, 0, now, pyC.replicas);
+    pushPoint(replicasChart, 1, now, pyC.hpa_desired);
+    pushPoint(replicasChart, 2, now, dualStackLive ? rsC.replicas : 0);
+    pushPoint(replicasChart, 3, now, dualStackLive ? rsC.hpa_desired : 0);
     replicasChart.update('none');
 
-    const avgCpu = data.cluster.pods.length > 0
-        ? data.cluster.pods.reduce((sum, p) => sum + p.cpu_percent, 0) / data.cluster.pods.length : 0;
-    pushPoint(cpuChart, 0, now, avgCpu);
+    pushPoint(cpuChart, 0, now, avgPodCpu(pyC.pods));
+    pushPoint(cpuChart, 1, now, dualStackLive ? avgPodCpu(rsC.pods) : 0);
     cpuChart.update('none');
 
+    renderConfigPanel();
+}
+
+function avgPodCpu(pods) {
+    if (!pods || !pods.length) return 0;
+    return pods.reduce((s, p) => s + p.cpu_percent, 0) / pods.length;
 }
 
 function pushPoint(chart, idx, x, y) {
@@ -531,30 +730,217 @@ function pushPoint(chart, idx, x, y) {
 
 
 // ============================================================
+//  CLUSTER CONFIG
+// ============================================================
+function toggleConfigPanel() {
+    const body = document.getElementById('ccBody');
+    const toggle = document.getElementById('ccToggle');
+    const wasHidden = body.hasAttribute('hidden');
+    if (wasHidden) {
+        body.removeAttribute('hidden');
+        toggle.classList.add('open');
+        toggle.textContent = '▾';
+    } else {
+        body.setAttribute('hidden', '');
+        toggle.classList.remove('open');
+        toggle.textContent = '▸';
+    }
+    localStorage.setItem('clusterConfigExpanded', wasHidden ? '1' : '0');
+}
+
+function normalizeConfig(cfg) {
+    // Coerce dual_stack_enabled to bool; backend always provides it but be defensive.
+    return { ...cfg, dual_stack_enabled: !!cfg.dual_stack_enabled };
+}
+
+function onClusterConfigReceived(data) {
+    if (!data.current) return;
+    clusterConfig.current = normalizeConfig(data.current);
+    clusterConfig.defaults = data.defaults ? normalizeConfig(data.defaults) : null;
+    if (!clusterConfig.draft || clusterConfig.state !== 'modified') {
+        clusterConfig.draft = { ...clusterConfig.current };
+    }
+    clusterConfig.error = null;
+    clusterConfig.state = computeState();
+    renderConfigPanel();
+    // Update the load target hint regardless of render state.
+    updateLoadTargetHint();
+}
+
+function onClusterConfigResult(data) {
+    if (data.status === 'ok') {
+        clusterConfig.state = 'applying';
+        clusterConfig.error = null;
+    } else {
+        clusterConfig.state = 'error';
+        clusterConfig.error = data.error || data.status;
+    }
+    renderConfigPanel();
+}
+
+function onConfigInput(field, rawValue) {
+    if (!clusterConfig.draft) return;
+    clusterConfig.draft[field] = parseInt(rawValue, 10);
+    clusterConfig.state = computeState();
+    clusterConfig.error = null;
+    renderConfigPanel();
+}
+
+function onDualStackChange(checked) {
+    if (!clusterConfig.draft) return;
+    clusterConfig.draft.dual_stack_enabled = !!checked;
+    clusterConfig.state = computeState();
+    clusterConfig.error = null;
+    renderConfigPanel();
+}
+
+function onConfigApply() {
+    if (clusterConfig.state !== 'modified') return;
+    if (validateDraft(clusterConfig.draft).length > 0) return;
+    clusterConfig.state = 'applying';
+    renderConfigPanel();
+    send({ action: 'apply_cluster_config', value: clusterConfig.draft });
+}
+
+function onConfigReset() {
+    clusterConfig.state = 'applying';
+    renderConfigPanel();
+    send({ action: 'reset_cluster_config' });
+}
+
+function computeState() {
+    if (!clusterConfig.current || !clusterConfig.draft) return 'synced';
+    const numericEqual = CC_NUMERIC_FIELDS.every(
+        k => clusterConfig.draft[k] === clusterConfig.current[k]
+    );
+    const dualEqual = !!clusterConfig.draft.dual_stack_enabled === !!clusterConfig.current.dual_stack_enabled;
+    return (numericEqual && dualEqual) ? 'synced' : 'modified';
+}
+
+function validateDraft(draft) {
+    const errors = [];
+    if (!draft) return errors;
+    for (const [field, [lo, hi]] of Object.entries(CC_RANGES)) {
+        const v = draft[field];
+        if (!Number.isInteger(v) || v < lo || v > hi) {
+            errors.push(`${field} must be between ${lo} and ${hi}`);
+        }
+    }
+    if (draft.min_replicas > draft.max_replicas) {
+        errors.push(`min_replicas (${draft.min_replicas}) must be ≤ max_replicas (${draft.max_replicas})`);
+    }
+    if (draft.cpu_request_millicores > draft.cpu_limit_millicores) {
+        errors.push(`cpu_request (${draft.cpu_request_millicores}m) must be ≤ cpu_limit (${draft.cpu_limit_millicores}m)`);
+    }
+    return errors;
+}
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function updateLoadTargetHint() {
+    const el = document.getElementById('loadTargetHint');
+    if (!el) return;
+    const dualLive = !!(clusterConfig.current && clusterConfig.current.dual_stack_enabled);
+    el.textContent = dualLive ? '→ python-api + rust-api' : '→ python-api';
+}
+
+function renderConfigPanel() {
+    const draft = clusterConfig.draft;
+    if (!draft) return;
+
+    // Numeric sliders + value labels
+    for (const field of CC_NUMERIC_FIELDS) {
+        const input = document.getElementById(CC_INPUT_IDS[field]);
+        const label = document.getElementById(CC_VALUE_IDS[field]);
+        if (input) input.value = draft[field];
+        if (label) {
+            if (field === 'target_cpu_utilization' || field === 'target_memory_utilization') {
+                label.textContent = draft[field] + '%';
+            } else if (field.endsWith('_millicores')) {
+                label.textContent = draft[field] + 'm';
+            } else {
+                label.textContent = draft[field];
+            }
+        }
+    }
+
+    // Dual stack toggle
+    const dualCheckbox = document.getElementById('ccDualStack');
+    if (dualCheckbox) dualCheckbox.checked = !!draft.dual_stack_enabled;
+
+    // Badge
+    const badge = document.getElementById('ccBadge');
+    const badgeLabel = document.getElementById('ccBadgeLabel');
+    badge.dataset.state = clusterConfig.state;
+    const labels = { synced: 'Synced', modified: 'Modified', applying: 'Applying…', error: 'Error' };
+    badgeLabel.textContent = labels[clusterConfig.state] || clusterConfig.state;
+    badge.title = clusterConfig.error || '';
+
+    // Errors block
+    const errorsDiv = document.getElementById('ccErrors');
+    const errors = validateDraft(draft);
+    const escapedErrors = errors.map(e => `<div>${escapeHtml(e)}</div>`).join('');
+    if (clusterConfig.error) {
+        errorsDiv.innerHTML = `<div>${escapeHtml(clusterConfig.error)}</div>` + escapedErrors;
+    } else {
+        errorsDiv.innerHTML = escapedErrors;
+    }
+
+    // Apply / Reset enablement
+    const applyBtn = document.getElementById('ccApplyBtn');
+    applyBtn.disabled = clusterConfig.state !== 'modified' || errors.length > 0 || isRunning;
+    const resetBtn = document.getElementById('ccResetBtn');
+    resetBtn.disabled = clusterConfig.state === 'applying' || isRunning;
+
+    // Gating (load running)
+    document.getElementById('ccWarning').hidden = !isRunning;
+    for (const field of Object.keys(CC_INPUT_IDS)) {
+        const el = document.getElementById(CC_INPUT_IDS[field]);
+        if (el) el.disabled = isRunning || clusterConfig.state === 'applying';
+    }
+    if (dualCheckbox) dualCheckbox.disabled = isRunning || clusterConfig.state === 'applying';
+
+    updateLoadTargetHint();
+}
+
+// ============================================================
 //  ARCHITECTURE VIEW UPDATE
 // ============================================================
-let prevPodCount = 0;
+let prevPodSignature = '';
 
 function updateArchitecture(data) {
     const running = data.load.is_running;
-    const pods = data.cluster.pods;
-    const replicas = data.cluster.replicas;
-    const desired = data.cluster.hpa_desired;
-    const isScaling = desired > replicas;
-    const avgCpu = pods.length > 0
-        ? pods.reduce((s, p) => s + p.cpu_percent, 0) / pods.length : 0;
+    const dual = !!data.load.dual_stack_enabled;
+    const py = data.cluster.python || { replicas: 0, hpa_desired: 0, hpa_current_cpu: null, pods: [] };
+    const rs = data.cluster.rust   || { replicas: 0, hpa_desired: 0, hpa_current_cpu: null, pods: [] };
+
+    const stackedPods = [
+        ...py.pods.map(p => ({ ...p, stack: 'python' })),
+        ...(dual ? rs.pods.map(p => ({ ...p, stack: 'rust' })) : []),
+    ];
+    const totalPods = stackedPods.length;
+    const totalReplicas = py.replicas + (dual ? rs.replicas : 0);
+    const totalDesired = py.hpa_desired + (dual ? rs.hpa_desired : 0);
+    const isScaling = totalDesired > totalReplicas;
+    const avgCpu = stackedPods.length > 0
+        ? stackedPods.reduce((s, p) => s + p.cpu_percent, 0) / stackedPods.length : 0;
 
     // --- Toggle animated connections ---
     const reqConns = ['connWS', 'connHTTP', 'connTraefikSvc', 'connSvcPods'];
     reqConns.forEach(id => {
         document.getElementById(id).classList.toggle('active', running);
     });
-
     const metricsConns = ['connK8sAPI', 'connMetricsHPA', 'connPodsToMetrics'];
     metricsConns.forEach(id => {
-        document.getElementById(id).classList.toggle('active', pods.length > 0);
+        document.getElementById(id).classList.toggle('active', totalPods > 0);
     });
-
     const scalingConns = ['connHPAPods', 'connHPAToSvc'];
     scalingConns.forEach(id => {
         document.getElementById(id).classList.toggle('active', isScaling);
@@ -562,27 +948,36 @@ function updateArchitecture(data) {
 
     // --- Toggle particles ---
     document.getElementById('archRequestParticles').style.display = running ? '' : 'none';
-    document.getElementById('archWSUpParticles').style.display = pods.length > 0 ? '' : 'none';
-    document.getElementById('archMetricsParticles').style.display = pods.length > 0 ? '' : 'none';
+    document.getElementById('archWSUpParticles').style.display = totalPods > 0 ? '' : 'none';
+    document.getElementById('archMetricsParticles').style.display = totalPods > 0 ? '' : 'none';
     document.getElementById('archScalingParticles').style.display = isScaling ? '' : 'none';
 
     // --- Toggle horizontal flow labels ---
-    document.getElementById('archLabelPodsMetrics').setAttribute('opacity', pods.length > 0 ? '1' : '0');
+    document.getElementById('archLabelPodsMetrics').setAttribute('opacity', totalPods > 0 ? '1' : '0');
     document.getElementById('archLabelHPASvc').setAttribute('opacity', isScaling ? '1' : '0');
 
     // --- Scale label ---
     const scaleLabel = document.getElementById('archScaleLabel');
     scaleLabel.setAttribute('opacity', isScaling ? '1' : '0');
-    if (isScaling) scaleLabel.textContent = `scaling ${replicas} → ${desired}`;
+    if (isScaling) scaleLabel.textContent = `scaling ${totalReplicas} → ${totalDesired}`;
 
     // --- Pulse active components ---
     document.getElementById('archLoadGen').classList.toggle('arch-box-active', running);
 
     // --- Update metric labels ---
-    document.getElementById('archLabelRps').textContent = running ? data.load.actual_rps + ' rps' : '0 rps';
-    document.getElementById('archLabelAvg').textContent = data.response_times.avg_ms.toFixed(0) + ' ms';
-    const cpuInt = data.cluster.hpa_current_cpu;
-    document.getElementById('archLabelHPA').textContent = cpuInt != null ? `CPU ${cpuInt}%/50%` : 'CPU 50%';
+    const pyAvg = (data.response_times.python && data.response_times.python.avg_ms) || 0;
+    const rsAvg = (data.response_times.rust   && data.response_times.rust.avg_ms)   || 0;
+    const pyRps = (data.response_times.python && data.response_times.python.actual_rps) || 0;
+    const rsRps = (data.response_times.rust   && data.response_times.rust.actual_rps)   || 0;
+    const totalActualRps = pyRps + (dual ? rsRps : 0);
+    document.getElementById('archLabelRps').textContent = running ? totalActualRps + ' rps' : '0 rps';
+    const avgLabel = dual ? `py ${pyAvg.toFixed(0)} / rs ${rsAvg.toFixed(0)} ms` : `${pyAvg.toFixed(0)} ms`;
+    document.getElementById('archLabelAvg').textContent = avgLabel;
+    const pyCpu = py.hpa_current_cpu;
+    const rsCpu = rs.hpa_current_cpu;
+    let hpaLabel = pyCpu != null ? `CPU ${pyCpu}%` : 'CPU —';
+    if (dual) hpaLabel += rsCpu != null ? ` / ${rsCpu}%` : ' / —';
+    document.getElementById('archLabelHPA').textContent = hpaLabel;
 
     // --- Live panel ---
     const dot = document.getElementById('archStatusDot');
@@ -591,27 +986,33 @@ function updateArchitecture(data) {
     lbl.textContent = running ? 'RUNNING' : 'PAUSED';
     lbl.setAttribute('fill', running ? '#20e492' : '#7c8a94');
 
-    document.getElementById('archPanelRps').textContent = data.load.actual_rps;
-    document.getElementById('archPanelReplicas').textContent = replicas + '/' + desired;
-    document.getElementById('archPanelAvg').textContent = data.response_times.avg_ms.toFixed(0) + ' ms';
+    document.getElementById('archPanelRps').textContent = totalActualRps;
+    const replicasLabel = dual
+        ? `${py.replicas}+${rs.replicas}/${py.hpa_desired}+${rs.hpa_desired}`
+        : `${py.replicas}/${py.hpa_desired}`;
+    document.getElementById('archPanelReplicas').textContent = replicasLabel;
+    document.getElementById('archPanelAvg').textContent = dual
+        ? `${pyAvg.toFixed(0)}/${rsAvg.toFixed(0)} ms`
+        : `${pyAvg.toFixed(0)} ms`;
     document.getElementById('archPanelCpu').textContent = avgCpu.toFixed(0) + '%';
 
     // --- Render pods ---
-    renderArchPods(pods, desired);
+    renderArchPods(stackedPods, dual);
 }
 
-function renderArchPods(pods, desired) {
+function renderArchPods(pods, dual) {
     const container = document.getElementById('archPods');
     const count = Math.max(pods.length, 1);
+    const signature = pods.map(p => `${p.stack}:${p.name}`).join('|') + `:${count}:${dual ? 'D' : 'S'}`;
 
-    // Skip full re-render if pod count unchanged — just update metrics
-    if (count === prevPodCount && pods.length > 0) {
+    // Fast path: same pod identities — just refresh metrics.
+    if (signature === prevPodSignature && pods.length > 0) {
         pods.forEach((pod, i) => {
             const fill = document.getElementById('archPodFill' + i);
             const cpuText = document.getElementById('archPodCpu' + i);
             const cpuBar = document.getElementById('archPodCpuBar' + i);
             if (fill) {
-                const color = pod.cpu_percent > 80 ? '#e74c4c' : pod.cpu_percent > 50 ? '#f5a623' : '#20e492';
+                const color = cpuLoadColor(pod);
                 fill.setAttribute('fill', color);
                 fill.setAttribute('fill-opacity', '0.15');
                 if (cpuBar) { cpuBar.setAttribute('width', Math.min(64, pod.cpu_percent * 0.64)); cpuBar.setAttribute('fill', color); }
@@ -620,7 +1021,7 @@ function renderArchPods(pods, desired) {
         });
         return;
     }
-    prevPodCount = count;
+    prevPodSignature = signature;
 
     // Pod dimensions
     const podW = count <= 6 ? 100 : 80;
@@ -630,57 +1031,62 @@ function renderArchPods(pods, desired) {
     const startX = 480 - totalW / 2;
     const podY = 476;
 
-    // Fixed-width container box spanning the cluster
     const boxX = 140;
     const boxY = 450;
     const boxW = 680;
     const boxH = podY + podH + 14 - boxY;
 
     let html = '';
-    // Container box
     html += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="10" fill="#13181c" stroke="#2a3238" stroke-width="1.2" stroke-dasharray="4 3"/>`;
-    // Box label
     html += `<g transform="translate(${boxX + 10}, ${boxY + 14})">
         <rect x="0" y="0" width="10" height="7" rx="1.5" fill="none" stroke="#7c8a94" stroke-width="1"/>
         <circle cx="5" cy="3.5" r="1.2" fill="#7c8a94"/>
     </g>`;
     html += `<text x="${boxX + 26}" y="${boxY + 14}" fill="#7c8a94" font-size="9" font-weight="600" class="label-mono">Pods</text>`;
-    html += `<text x="${boxX + 55}" y="${boxY + 14}" fill="#3d4854" font-size="9" class="label-mono">${count} replica${count > 1 ? 's' : ''}</text>`;
+    const labelSuffix = dual ? ` (py + rs)` : '';
+    html += `<text x="${boxX + 55}" y="${boxY + 14}" fill="#3d4854" font-size="9" class="label-mono">${count} replica${count > 1 ? 's' : ''}${labelSuffix}</text>`;
 
-    // Individual pods inside the box
     for (let i = 0; i < count; i++) {
-        const pod = pods[i] || { name: 'pending...', cpu_percent: 0, memory_mb: 0, status: 'Pending' };
+        const pod = pods[i] || { name: 'pending...', cpu_percent: 0, memory_mb: 0, status: 'Pending', stack: 'python' };
         const px = startX + i * (podW + gap);
-        const color = pod.cpu_percent > 80 ? '#e74c4c' : pod.cpu_percent > 50 ? '#f5a623' : '#20e492';
-        const statusColor = pod.status === 'Running' ? '#20e492' : '#f5a623';
+        const cpuColor = cpuLoadColor(pod);
+        const stackColor = STACK_COLORS[pod.stack] || STACK_COLORS.python;
+        const statusColor = pod.status === 'Running' ? stackColor : '#f5a623';
         const shortName = pod.name.length > 12 ? pod.name.slice(-10) : pod.name;
         const delay = i * 0.08;
+        const tag = pod.stack === 'rust' ? 'RS' : 'PY';
 
         html += `<g class="arch-pod" style="animation-delay:${delay}s">
-            <rect x="${px}" y="${podY}" width="${podW}" height="${podH}" rx="6" fill="#1a1f23" stroke="#2a3238" stroke-width="1"/>
-            <rect id="archPodFill${i}" x="${px}" y="${podY}" width="${podW}" height="${podH}" rx="6" fill="${color}" fill-opacity="0.15"/>
-            <g transform="translate(${px + 8}, ${podY + 10})">
-                <rect x="0" y="0" width="10" height="7" rx="1.5" fill="none" stroke="${statusColor}" stroke-width="1"/>
-                <circle cx="5" cy="3.5" r="1.2" fill="${statusColor}"/>
-            </g>
-            <text x="${px + 22}" y="${podY + 16}" fill="#e8eaed" font-size="${count <= 6 ? 8 : 7}" class="label-mono">${shortName}</text>
+            <rect x="${px}" y="${podY}" width="${podW}" height="${podH}" rx="6" fill="#1a1f23" stroke="${stackColor}" stroke-width="1" stroke-opacity="0.45"/>
+            <rect id="archPodFill${i}" x="${px}" y="${podY}" width="${podW}" height="${podH}" rx="6" fill="${cpuColor}" fill-opacity="0.15"/>
+            <rect x="${px + 6}" y="${podY + 6}" width="20" height="10" rx="3" fill="${stackColor}" fill-opacity="0.18" stroke="${stackColor}" stroke-width="0.6"/>
+            <text x="${px + 16}" y="${podY + 14}" fill="${stackColor}" font-size="7" font-weight="700" text-anchor="middle" class="label-mono">${tag}</text>
+            <text x="${px + 30}" y="${podY + 14}" fill="#e8eaed" font-size="${count <= 6 ? 7 : 6}" class="label-mono">${shortName}</text>
             <rect x="${px + 8}" y="${podY + 28}" width="64" height="3" rx="1.5" fill="#2a3238"/>
-            <rect id="archPodCpuBar${i}" x="${px + 8}" y="${podY + 28}" width="${Math.min(64, pod.cpu_percent * 0.64)}" height="3" rx="1.5" fill="${color}"/>
-            <text id="archPodCpu${i}" x="${px + 8}" y="${podY + 44}" fill="${color}" font-size="9" font-weight="700" class="label-mono">${pod.cpu_percent.toFixed(0)}%</text>
+            <rect id="archPodCpuBar${i}" x="${px + 8}" y="${podY + 28}" width="${Math.min(64, pod.cpu_percent * 0.64)}" height="3" rx="1.5" fill="${cpuColor}"/>
+            <text id="archPodCpu${i}" x="${px + 8}" y="${podY + 44}" fill="${cpuColor}" font-size="9" font-weight="700" class="label-mono">${pod.cpu_percent.toFixed(0)}%</text>
             <text x="${px + 8}" y="${podY + 58}" fill="#7c8a94" font-size="8" class="label-mono">${pod.memory_mb.toFixed(0)} MB</text>
-            <circle cx="${px + podW - 10}" cy="${podY + 12}" r="3" fill="${statusColor}" opacity="0.8"/>
+            <circle cx="${px + podW - 10}" cy="${podY + 12}" r="3" fill="${statusColor}" opacity="0.85"/>
         </g>`;
     }
 
     container.innerHTML = html;
 }
 
+function cpuLoadColor(pod) {
+    if (pod.cpu_percent > 80) return '#e74c4c';
+    if (pod.cpu_percent > 50) return '#f5a623';
+    return STACK_COLORS[pod.stack] || STACK_COLORS.python;
+}
+
 // ============================================================
 //  INIT
 // ============================================================
 connect();
-// Render initial empty architecture state
-renderArchPods([{ name: 'python-api-...', cpu_percent: 0, memory_mb: 0, status: 'Pending' }], 1);
+renderArchPods([{ name: 'python-api-...', cpu_percent: 0, memory_mb: 0, status: 'Pending', stack: 'python' }], false);
+if (localStorage.getItem('clusterConfigExpanded') === '1') {
+    toggleConfigPanel();
+}
 </script>
 
 </body>

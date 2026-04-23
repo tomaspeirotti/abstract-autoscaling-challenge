@@ -1,7 +1,7 @@
 import math
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -9,17 +9,24 @@ class ResponseRecord:
     timestamp: float
     elapsed_ms: float
     status_code: int
+    stack: str  # "python" | "rust"
 
 
 @dataclass
-class MetricsSnapshot:
-    timestamp: float
+class StackSnapshot:
     avg_ms: float
     p90_ms: float
     p99_ms: float
     actual_rps: int
     total_requests: int
     error_count: int
+
+
+@dataclass
+class MetricsSnapshot:
+    timestamp: float
+    python: StackSnapshot
+    rust: StackSnapshot
 
 
 def _percentile(sorted_data: list[float], pct: float) -> float:
@@ -36,8 +43,30 @@ def _percentile(sorted_data: list[float], pct: float) -> float:
     return sorted_data[f] * (c - k) + sorted_data[c] * (k - f)
 
 
+def _empty_stack() -> StackSnapshot:
+    return StackSnapshot(
+        avg_ms=0, p90_ms=0, p99_ms=0,
+        actual_rps=0, total_requests=0, error_count=0,
+    )
+
+
+def _compute_stack(records: list[ResponseRecord]) -> StackSnapshot:
+    if not records:
+        return _empty_stack()
+    times = sorted(r.elapsed_ms for r in records)
+    errors = sum(1 for r in records if r.status_code >= 400)
+    return StackSnapshot(
+        avg_ms=round(sum(times) / len(times), 2),
+        p90_ms=round(_percentile(times, 90), 2),
+        p99_ms=round(_percentile(times, 99), 2),
+        actual_rps=len(records),
+        total_requests=len(records),
+        error_count=errors,
+    )
+
+
 class MetricsStore:
-    """Collects response times and computes rolling aggregates."""
+    """Collects response times per-stack and computes rolling aggregates."""
 
     def __init__(self, window_seconds: int = 300):
         self._window_seconds = window_seconds
@@ -45,48 +74,31 @@ class MetricsStore:
         self._snapshots: deque[MetricsSnapshot] = deque(maxlen=window_seconds)
         self._last_snapshot_time: float = 0
 
-    def record_response(self, elapsed_ms: float, status_code: int) -> None:
+    def record_response(self, elapsed_ms: float, status_code: int, stack: str) -> None:
         self._records.append(ResponseRecord(
             timestamp=time.time(),
             elapsed_ms=elapsed_ms,
             status_code=status_code,
+            stack=stack,
         ))
 
     def compute_snapshot(self) -> MetricsSnapshot:
-        """Compute a snapshot from records in the last 1 second."""
+        """Compute a snapshot from records in the last 1 second, split by stack."""
         now = time.time()
         cutoff = now - 1.0
 
-        # Evict old records beyond the rolling window
+        # Evict old records beyond the rolling window.
         while self._records and self._records[0].timestamp < now - self._window_seconds:
             self._records.popleft()
 
-        # Get records from the last second
-        recent = [r for r in self._records if r.timestamp >= cutoff]
+        recent_python = [r for r in self._records if r.timestamp >= cutoff and r.stack == "python"]
+        recent_rust = [r for r in self._records if r.timestamp >= cutoff and r.stack == "rust"]
 
-        if not recent:
-            snapshot = MetricsSnapshot(
-                timestamp=now,
-                avg_ms=0,
-                p90_ms=0,
-                p99_ms=0,
-                actual_rps=0,
-                total_requests=0,
-                error_count=0,
-            )
-        else:
-            times = sorted(r.elapsed_ms for r in recent)
-            errors = sum(1 for r in recent if r.status_code >= 400)
-            snapshot = MetricsSnapshot(
-                timestamp=now,
-                avg_ms=round(sum(times) / len(times), 2),
-                p90_ms=round(_percentile(times, 90), 2),
-                p99_ms=round(_percentile(times, 99), 2),
-                actual_rps=len(recent),
-                total_requests=len(recent),
-                error_count=errors,
-            )
-
+        snapshot = MetricsSnapshot(
+            timestamp=now,
+            python=_compute_stack(recent_python),
+            rust=_compute_stack(recent_rust),
+        )
         self._snapshots.append(snapshot)
         self._last_snapshot_time = now
         return snapshot

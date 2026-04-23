@@ -1,18 +1,51 @@
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+---
+# Strip /py and /rs prefixes so backends still see /work and /health.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
 metadata:
-  name: python-api-ingress
+  name: strip-py
   namespace: default
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: python-api
-            port:
-              number: 80
+  stripPrefix:
+    prefixes:
+      - /py
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-rs
+  namespace: default
+spec:
+  stripPrefix:
+    prefixes:
+      - /rs
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: api-ingress
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    # Default route (no prefix) → python-api, for backward compatibility.
+    - match: PathPrefix(`/`) && !PathPrefix(`/py`) && !PathPrefix(`/rs`)
+      kind: Rule
+      services:
+        - name: python-api
+          port: 80
+    - match: PathPrefix(`/py`)
+      kind: Rule
+      middlewares:
+        - name: strip-py
+      services:
+        - name: python-api
+          port: 80
+    - match: PathPrefix(`/rs`)
+      kind: Rule
+      middlewares:
+        - name: strip-rs
+      services:
+        - name: rust-api
+          port: 80

@@ -1,6 +1,5 @@
 import asyncio
-import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
@@ -15,11 +14,21 @@ class PodMetrics:
 
 
 @dataclass
-class ClusterSnapshot:
+class StackSnapshot:
     replicas: int
     hpa_desired: int
     hpa_current_cpu: int | None  # current avg CPU utilization %
     pods: list[PodMetrics]
+
+
+@dataclass
+class ClusterSnapshot:
+    python: StackSnapshot
+    rust: StackSnapshot | None = None  # None when dual stack is disabled
+
+
+_STACK_TO_DEPLOYMENT = {"python": "python-api", "rust": "rust-api"}
+_STACK_TO_HPA = {"python": "python-api-hpa", "rust": "rust-api-hpa"}
 
 
 def parse_cpu(value: str) -> float:
@@ -43,19 +52,15 @@ def parse_memory(value: str) -> float:
 
 
 class K8sMonitor:
-    """Monitors Kubernetes cluster metrics for the python-api deployment."""
+    """Monitors Kubernetes cluster metrics for python-api and optionally rust-api."""
 
     def __init__(
         self,
         namespace: str = "default",
-        deployment_name: str = "python-api",
-        hpa_name: str = "python-api-hpa",
         cpu_request_millicores: int = 100,
     ):
         self._namespace = namespace
-        self._deployment_name = deployment_name
-        self._hpa_name = hpa_name
-        self._cpu_request_m = cpu_request_millicores
+        self.cpu_request_millicores = cpu_request_millicores  # public: mutable by ClusterConfigManager
         self._initialized = False
 
     def _ensure_init(self) -> None:
@@ -67,16 +72,36 @@ class K8sMonitor:
             self._initialized = True
 
     async def get_metrics(self) -> ClusterSnapshot:
-        """Fetch cluster metrics. Runs blocking K8s API calls in a thread."""
+        """Fetch cluster metrics for all stacks that exist. Runs blocking K8s API calls in a thread."""
         self._ensure_init()
         return await asyncio.to_thread(self._get_metrics_sync)
 
     def _get_metrics_sync(self) -> ClusterSnapshot:
+        python = self._get_stack_sync("python")
+        rust = None
+        # Rust snapshot only populated if the Deployment exists (dual mode ON).
+        if self._deployment_exists_sync(_STACK_TO_DEPLOYMENT["rust"]):
+            rust = self._get_stack_sync("rust")
+        return ClusterSnapshot(python=python, rust=rust)
+
+    def _deployment_exists_sync(self, name: str) -> bool:
+        apps_api = client.AppsV1Api()
+        try:
+            apps_api.read_namespaced_deployment(name=name, namespace=self._namespace)
+            return True
+        except ApiException as e:
+            if e.status == 404:
+                return False
+            raise
+
+    def _get_stack_sync(self, stack: str) -> StackSnapshot:
+        deployment_name = _STACK_TO_DEPLOYMENT[stack]
+        hpa_name = _STACK_TO_HPA[stack]
         custom_api = client.CustomObjectsApi()
         v1 = client.CoreV1Api()
         autoscaling_api = client.AutoscalingV2Api()
 
-        # Get pod metrics (CPU, memory)
+        # Pod usage metrics (CPU, memory) via metrics.k8s.io.
         pod_metrics_map: dict[str, tuple[float, float]] = {}
         try:
             metrics_result = custom_api.list_namespaced_custom_object(
@@ -84,23 +109,22 @@ class K8sMonitor:
                 version="v1beta1",
                 namespace=self._namespace,
                 plural="pods",
-                label_selector=f"app={self._deployment_name}",
+                label_selector=f"app={deployment_name}",
             )
             for item in metrics_result.get("items", []):
                 name = item["metadata"]["name"]
                 for container in item.get("containers", []):
                     cpu_cores = parse_cpu(container["usage"]["cpu"])
                     mem_mb = parse_memory(container["usage"]["memory"])
-                    # CPU percent relative to request
-                    cpu_pct = (cpu_cores * 1000 / self._cpu_request_m) * 100
+                    cpu_pct = (cpu_cores * 1000 / self.cpu_request_millicores) * 100
                     pod_metrics_map[name] = (round(cpu_pct, 1), round(mem_mb, 1))
         except ApiException:
             pass  # metrics-server may not be ready
 
-        # Get pod list and statuses
+        # Pod list and statuses.
         pods_result = v1.list_namespaced_pod(
             namespace=self._namespace,
-            label_selector=f"app={self._deployment_name}",
+            label_selector=f"app={deployment_name}",
         )
         pods: list[PodMetrics] = []
         for pod in pods_result.items:
@@ -109,12 +133,12 @@ class K8sMonitor:
             cpu_pct, mem_mb = pod_metrics_map.get(name, (0.0, 0.0))
             pods.append(PodMetrics(name=name, cpu_percent=cpu_pct, memory_mb=mem_mb, status=status))
 
-        # Get HPA status
+        # HPA status.
         hpa_desired = len(pods)
         hpa_current_cpu = None
         try:
             hpa = autoscaling_api.read_namespaced_horizontal_pod_autoscaler(
-                name=self._hpa_name,
+                name=hpa_name,
                 namespace=self._namespace,
             )
             hpa_desired = hpa.status.desired_replicas or len(pods)
@@ -125,7 +149,7 @@ class K8sMonitor:
         except ApiException:
             pass  # HPA may not exist yet
 
-        return ClusterSnapshot(
+        return StackSnapshot(
             replicas=len([p for p in pods if p.status == "Running"]),
             hpa_desired=hpa_desired,
             hpa_current_cpu=hpa_current_cpu,

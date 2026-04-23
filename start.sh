@@ -23,6 +23,7 @@ for cmd in docker kubectl k3d python3; do
 done
 docker info &>/dev/null || fail "Docker is not running. Start Docker Desktop first."
 echo -e "  docker, kubectl, k3d, python3 ${GREEN}OK${RESET}"
+echo -e "  ${DIM}(rust image built inside the container; no local Rust toolchain required)${RESET}"
 
 # --- Cluster ---
 if k3d cluster list 2>/dev/null | grep -q "$CLUSTER_NAME"; then
@@ -42,20 +43,25 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# --- Deploy API ---
-step "Building and deploying API..."
+# --- Deploy APIs ---
+step "Building and deploying APIs..."
 docker build -t python-api:latest "$SCRIPT_DIR/api" -q
-k3d image import python-api:latest -c "$CLUSTER_NAME" 2>/dev/null
-kubectl apply -f "$SCRIPT_DIR/k8s/" > /dev/null
+docker build -t rust-api:latest   "$SCRIPT_DIR/api-rust" -q
+k3d image import python-api:latest rust-api:latest -c "$CLUSTER_NAME" 2>/dev/null
+# Apply core manifests (python-api + ingress). Rust is created on demand by the dashboard.
+kubectl apply -f "$SCRIPT_DIR/k8s/deployment.yaml" > /dev/null
+kubectl apply -f "$SCRIPT_DIR/k8s/service.yaml"    > /dev/null
+kubectl apply -f "$SCRIPT_DIR/k8s/hpa.yaml"        > /dev/null
+kubectl apply -f "$SCRIPT_DIR/k8s/ingress.yaml"    > /dev/null
 kubectl rollout status deployment/python-api --timeout=120s
 
-# Verify API is reachable via Ingress
+# Verify API is reachable via Ingress (path-based routing)
 for i in $(seq 1 15); do
-  if curl -sf "http://localhost:${API_PORT}/health" &>/dev/null; then
-    echo -e "  API reachable at ${GREEN}http://localhost:${API_PORT}${RESET}"
+  if curl -sf "http://localhost:${API_PORT}/py/health" &>/dev/null; then
+    echo -e "  python API reachable at ${GREEN}http://localhost:${API_PORT}/py${RESET}"
     break
   fi
-  [ "$i" -eq 15 ] && warn "API not reachable at port ${API_PORT} yet — Traefik may need a moment"
+  [ "$i" -eq 15 ] && warn "API not reachable at port ${API_PORT}/py yet — Traefik may need a moment"
   sleep 1
 done
 

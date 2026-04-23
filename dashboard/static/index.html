@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abstract - Load Testing Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <h1><span class="brand-mark">Abstract</span> Load Testing</h1>
+    <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Disconnected</span>
+    </div>
+</div>
+
+<!-- Split View -->
+<div class="split-view">
+
+<!-- ==================== ARCHITECTURE (left column) ==================== -->
+<div class="split-arch">
+<div class="arch-controls">
+    <button class="btn btn-start" id="toggleBtn" onclick="toggleLoad()">Start</button>
+    <div class="slider-group">
+        <label>RPS</label>
+        <input type="range" id="rpsSlider" min="1" max="500" value="10" oninput="onRpsChange(this.value)">
+        <span class="rps-value" id="rpsValue">10</span>
+    </div>
+    <div class="url-input">
+        <label>Target</label>
+        <input type="text" id="targetUrl" value="http://localhost:8080/work" onchange="onUrlChange(this.value)">
+    </div>
+</div>
+<div class="arch-container">
+<svg viewBox="0 0 960 680" class="arch-svg" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <!-- Glow filters -->
+    <filter id="glowGreen" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowViolet" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowOrange" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="130%">
+        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+
+    <!-- Arrow marker for request flow -->
+    <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6" fill="#20e492"/>
+    </marker>
+    <marker id="arrowViolet" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6" fill="#8b7cf6"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6" fill="#f5a623"/>
+    </marker>
+
+    <!-- Particle motion paths (invisible, only for animateMotion) -->
+    <path id="mpathWS" d="M 480 58 L 480 110" fill="none"/>
+    <path id="mpathHTTP" d="M 260 198 C 260 232, 260 248, 260 300" fill="none"/>
+    <path id="mpathTraefikSvc" d="M 260 348 L 260 388" fill="none"/>
+    <path id="mpathSvcPods" d="M 260 434 L 260 450" fill="none"/>
+    <path id="mpathK8sAPI" d="M 700 198 C 700 232, 700 248, 700 300" fill="none"/>
+    <path id="mpathMetricsHPA" d="M 700 348 L 700 388" fill="none"/>
+    <path id="mpathHPAPods" d="M 700 434 L 700 450" fill="none"/>
+    <!-- Horizontal motion paths -->
+    <path id="mpathWSUp" d="M 480 110 L 480 58" fill="none"/>
+    <path id="mpathPodsToMetrics" d="M 480 450 L 480 340 C 480 318, 530 318, 600 327" fill="none"/>
+    <path id="mpathHPAToSvc" d="M 600 409 L 360 409" fill="none"/>
+</defs>
+
+<!-- ===== CONNECTION LINES (behind everything) ===== -->
+<g id="archConnections">
+    <!-- Request flow: Browser → Backend -->
+    <line id="connWS" class="conn-line conn-request" x1="480" y1="58" x2="480" y2="110"/>
+    <!-- Request flow: Backend(LoadGen) → Cluster(Traefik) -->
+    <path id="connHTTP" class="conn-line conn-request" d="M 260 198 C 260 240, 260 255, 260 300" marker-end="url(#arrowGreen)"/>
+    <!-- Request flow: Traefik → Service -->
+    <line id="connTraefikSvc" class="conn-line conn-request" x1="260" y1="348" x2="260" y2="388"/>
+    <!-- Request flow: Service → Pods box top -->
+    <line id="connSvcPods" class="conn-line conn-request" x1="260" y1="434" x2="260" y2="450" marker-end="url(#arrowGreen)"/>
+
+    <!-- Metrics flow: K8sMonitor → Cluster(metrics-server) -->
+    <path id="connK8sAPI" class="conn-line conn-metrics" d="M 700 198 C 700 240, 700 255, 700 300" marker-end="url(#arrowViolet)"/>
+    <!-- Metrics flow: metrics-server → HPA -->
+    <line id="connMetricsHPA" class="conn-line conn-metrics" x1="700" y1="348" x2="700" y2="388"/>
+
+    <!-- Scaling: HPA → Pods box top-right -->
+    <line id="connHPAPods" class="conn-line conn-scaling" x1="700" y1="434" x2="700" y2="450" marker-end="url(#arrowOrange)"/>
+
+    <!-- Pods box → metrics-server (up through center gap, then right) -->
+    <path id="connPodsToMetrics" class="conn-line conn-metrics" d="M 480 450 L 480 340 C 480 318, 530 318, 600 327" marker-end="url(#arrowViolet)"/>
+
+    <!-- HORIZONTAL: HPA → Service (scaling feedback, left arrow) -->
+    <path id="connHPAToSvc" class="conn-line conn-scaling" d="M 600 409 L 360 409" marker-end="url(#arrowOrange)"/>
+
+</g>
+
+<!-- ===== CLUSTER BOX ===== -->
+<rect x="100" y="268" width="760" height="400" rx="14" fill="#151a1e" stroke="#2a3238" stroke-width="1.5" filter="url(#softShadow)"/>
+<!-- Cluster label -->
+<g transform="translate(480, 288)">
+    <!-- K8s wheel icon -->
+    <g transform="translate(-60, -9) scale(0.7)" fill="#7c8a94">
+        <circle cx="12" cy="12" r="3.5" fill="none" stroke="#7c8a94" stroke-width="1.5"/>
+        <path d="M12 1v3M12 21v-3M4.22 4.22l2.12 2.12M17.66 17.66l-2.12-2.12M1 12h3M21 12h-3M4.22 19.78l2.12-2.12M17.66 6.34l-2.12 2.12" stroke="#7c8a94" stroke-width="1.2" stroke-linecap="round"/>
+    </g>
+    <text x="-38" y="-1" fill="#7c8a94" font-size="12" font-weight="600" letter-spacing="0.06em">K3D CLUSTER</text>
+    <text x="60" y="-1" fill="#3d4854" font-size="10" font-weight="400" class="label-mono">"challenge-demo"</text>
+</g>
+
+<!-- ===== EXTERNAL COMPONENTS ===== -->
+
+<!-- Browser -->
+<g id="compBrowser">
+    <rect x="355" y="10" width="250" height="48" rx="10" fill="#1a1f23" stroke="#2a3238" stroke-width="1.5" filter="url(#softShadow)"/>
+    <!-- Browser icon -->
+    <g transform="translate(382, 24)">
+        <circle cx="8" cy="8" r="7" fill="none" stroke="#7c8a94" stroke-width="1.3"/>
+        <ellipse cx="8" cy="8" rx="3" ry="7" fill="none" stroke="#7c8a94" stroke-width="1"/>
+        <line x1="1" y1="8" x2="15" y2="8" stroke="#7c8a94" stroke-width="1"/>
+    </g>
+    <text x="410" y="39" fill="#e8eaed" font-size="13" font-weight="600">Browser</text>
+    <text x="480" y="39" fill="#7c8a94" font-size="10" class="label-mono">localhost:3000</text>
+</g>
+
+<!-- Dashboard Backend -->
+<g id="compBackend">
+    <rect x="150" y="110" width="660" height="88" rx="10" fill="#1a1f23" stroke="#2a3238" stroke-width="1.5" filter="url(#softShadow)"/>
+    <!-- FastAPI lightning icon -->
+    <g transform="translate(172, 121)">
+        <path d="M7 2L3 9h4l-1 7 5-8H7l1-6z" fill="#20e492" opacity="0.7"/>
+    </g>
+    <text x="190" y="132" fill="#e8eaed" font-size="12" font-weight="600">Dashboard Backend</text>
+    <text x="330" y="132" fill="#3d4854" font-size="9" class="label-mono">FastAPI :3000</text>
+
+    <!-- LoadGenerator sub-box -->
+    <rect id="archLoadGen" x="168" y="142" width="170" height="44" rx="6" fill="#151a1e" stroke="#2a3238" stroke-width="1"/>
+    <g transform="translate(182, 158)">
+        <!-- Lightning bolt icon -->
+        <path d="M6 1L2 7h3.5L4 12l5-6H5.5L6 1z" fill="#20e492" opacity="0.8" transform="scale(0.9)"/>
+    </g>
+    <text x="200" y="169" fill="#e8eaed" font-size="10" font-weight="500">Load Generator</text>
+    <text id="archLabelRps" x="310" y="169" fill="#20e492" font-size="9" font-weight="700" text-anchor="end" class="label-mono">0 rps</text>
+
+    <!-- MetricsStore sub-box -->
+    <rect x="398" y="142" width="170" height="44" rx="6" fill="#151a1e" stroke="#2a3238" stroke-width="1"/>
+    <g transform="translate(412, 156)">
+        <!-- Chart bars icon -->
+        <rect x="0" y="6" width="3" height="6" rx="0.5" fill="#7c8a94"/>
+        <rect x="5" y="3" width="3" height="9" rx="0.5" fill="#7c8a94"/>
+        <rect x="10" y="0" width="3" height="12" rx="0.5" fill="#7c8a94"/>
+    </g>
+    <text x="432" y="169" fill="#e8eaed" font-size="10" font-weight="500">Metrics Store</text>
+    <text id="archLabelAvg" x="558" y="169" fill="#7c8a94" font-size="9" font-weight="500" text-anchor="end" class="label-mono">0 ms</text>
+
+    <!-- K8sMonitor sub-box -->
+    <rect x="628" y="142" width="170" height="44" rx="6" fill="#151a1e" stroke="#2a3238" stroke-width="1"/>
+    <g transform="translate(642, 155)">
+        <!-- Eye/monitor icon -->
+        <ellipse cx="7" cy="6" rx="7" ry="4.5" fill="none" stroke="#8b7cf6" stroke-width="1.2" opacity="0.8"/>
+        <circle cx="7" cy="6" r="2" fill="#8b7cf6" opacity="0.8"/>
+    </g>
+    <text x="662" y="169" fill="#e8eaed" font-size="10" font-weight="500">K8s Monitor</text>
+</g>
+
+<!-- ===== CONNECTION LABELS ===== -->
+<!-- WebSocket label -->
+<g transform="translate(490, 82)">
+    <rect x="-38" y="-10" width="76" height="17" rx="4" fill="#1a1f23" stroke="#2a3238" stroke-width="0.8"/>
+    <text x="0" y="2" fill="#20e492" font-size="8" font-weight="600" text-anchor="middle" class="label-mono">WebSocket</text>
+    <!-- Bidirectional arrows -->
+    <text x="-47" y="3" fill="#20e492" font-size="10">&#x2195;</text>
+</g>
+
+<!-- HTTP POST label -->
+<g transform="translate(212, 250)">
+    <rect x="-38" y="-10" width="76" height="17" rx="4" fill="#1a1f23" stroke="#2a3238" stroke-width="0.8"/>
+    <text x="0" y="2" fill="#20e492" font-size="8" font-weight="600" text-anchor="middle" class="label-mono">HTTP POST</text>
+    <!-- Down arrow -->
+    <text x="-47" y="3" fill="#20e492" font-size="10">&#x2193;</text>
+</g>
+
+<!-- K8s API label -->
+<g transform="translate(750, 250)">
+    <rect x="-30" y="-10" width="60" height="17" rx="4" fill="#1a1f23" stroke="#2a3238" stroke-width="0.8"/>
+    <text x="0" y="2" fill="#8b7cf6" font-size="8" font-weight="600" text-anchor="middle" class="label-mono">K8s API</text>
+    <text x="-39" y="3" fill="#8b7cf6" font-size="10">&#x2193;</text>
+</g>
+
+<!-- ===== CLUSTER INTERNAL COMPONENTS ===== -->
+
+<!-- Traefik LB -->
+<g id="compTraefik">
+    <rect x="160" y="306" width="200" height="42" rx="8" fill="#1a1f23" stroke="#2a3238" stroke-width="1.2"/>
+    <!-- Network/globe icon -->
+    <g transform="translate(176, 318)">
+        <circle cx="7" cy="7" r="6" fill="none" stroke="#20e492" stroke-width="1" opacity="0.7"/>
+        <ellipse cx="7" cy="7" rx="3" ry="6" fill="none" stroke="#20e492" stroke-width="0.8" opacity="0.7"/>
+        <line x1="1" y1="7" x2="13" y2="7" stroke="#20e492" stroke-width="0.8" opacity="0.7"/>
+    </g>
+    <text x="198" y="332" fill="#e8eaed" font-size="11" font-weight="600">Traefik LB</text>
+    <text x="275" y="332" fill="#3d4854" font-size="9" class="label-mono">:8080</text>
+</g>
+
+<!-- metrics-server -->
+<g id="compMetricsSrv">
+    <rect x="600" y="306" width="200" height="42" rx="8" fill="#1a1f23" stroke="#2a3238" stroke-width="1.2"/>
+    <!-- Gauge/meter icon -->
+    <g transform="translate(616, 317)">
+        <path d="M2 10a7 7 0 0 1 14 0" fill="none" stroke="#8b7cf6" stroke-width="1.2" opacity="0.8"/>
+        <line x1="9" y1="10" x2="11" y2="5" stroke="#8b7cf6" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/>
+        <circle cx="9" cy="10" r="1" fill="#8b7cf6" opacity="0.8"/>
+    </g>
+    <text x="638" y="332" fill="#e8eaed" font-size="11" font-weight="600">metrics-server</text>
+</g>
+
+<!-- Service -->
+<g id="compService">
+    <rect x="160" y="388" width="200" height="42" rx="8" fill="#1a1f23" stroke="#2a3238" stroke-width="1.2"/>
+    <!-- Service mesh icon -->
+    <g transform="translate(176, 400)">
+        <circle cx="4" cy="4" r="2.5" fill="none" stroke="#20e492" stroke-width="1" opacity="0.7"/>
+        <circle cx="12" cy="4" r="2.5" fill="none" stroke="#20e492" stroke-width="1" opacity="0.7"/>
+        <circle cx="8" cy="10" r="2.5" fill="none" stroke="#20e492" stroke-width="1" opacity="0.7"/>
+        <line x1="6" y1="5" x2="10" y2="8" stroke="#20e492" stroke-width="0.7" opacity="0.5"/>
+        <line x1="10" y1="5" x2="6" y2="8" stroke="#20e492" stroke-width="0.7" opacity="0.5"/>
+    </g>
+    <text x="198" y="414" fill="#e8eaed" font-size="11" font-weight="600">Service</text>
+    <text x="260" y="414" fill="#3d4854" font-size="9" class="label-mono">ClusterIP</text>
+</g>
+
+<!-- HPA -->
+<g id="compHPA">
+    <rect x="600" y="388" width="200" height="42" rx="8" fill="#1a1f23" stroke="#2a3238" stroke-width="1.2"/>
+    <!-- Scale/resize icon -->
+    <g transform="translate(616, 400)">
+        <path d="M2 8L6 4v3h4V4l4 4-4 4V9H6v3z" fill="#f5a623" opacity="0.8"/>
+    </g>
+    <text x="638" y="414" fill="#e8eaed" font-size="11" font-weight="600">HPA</text>
+    <text id="archLabelHPA" x="680" y="414" fill="#f5a623" font-size="9" font-weight="600" class="label-mono">CPU 50%</text>
+</g>
+
+<!-- Internal connection labels -->
+<g transform="translate(280, 370)">
+    <text fill="#3d4854" font-size="8" class="label-mono">round-robin</text>
+</g>
+<g transform="translate(712, 370)">
+    <text fill="#3d4854" font-size="8" class="label-mono">CPU metrics</text>
+</g>
+<g transform="translate(605, 458)">
+    <text id="archScaleLabel" fill="#f5a623" font-size="8" font-weight="600" class="label-mono" opacity="0">scaling...</text>
+</g>
+<!-- Horizontal flow labels -->
+<g id="archLabelPodsMetrics" transform="translate(510, 435)" opacity="0">
+    <rect x="-48" y="-10" width="96" height="17" rx="4" fill="#1a1f23" stroke="#2a3238" stroke-width="0.8"/>
+    <text x="0" y="2" fill="#8b7cf6" font-size="7.5" font-weight="600" text-anchor="middle" class="label-mono">resource metrics</text>
+    <text x="-56" y="3" fill="#8b7cf6" font-size="9">&#x2191;</text>
+</g>
+<g id="archLabelHPASvc" transform="translate(480, 400)" opacity="0">
+    <rect x="-42" y="-10" width="84" height="17" rx="4" fill="#1a1f23" stroke="#2a3238" stroke-width="0.8"/>
+    <text x="0" y="2" fill="#f5a623" font-size="7.5" font-weight="600" text-anchor="middle" class="label-mono">scale replicas</text>
+    <text x="-50" y="3" fill="#f5a623" font-size="9">&#x2190;</text>
+</g>
+
+<!-- ===== DYNAMIC PODS AREA ===== -->
+<g id="archPods" transform="translate(0, 0)">
+    <!-- Rendered by JS -->
+</g>
+
+<!-- ===== ANIMATED PARTICLES ===== -->
+<!-- Request flow particles (visible when load is running) -->
+<g id="archRequestParticles" style="display:none;">
+    <!-- WS segment -->
+    <circle class="particle" r="3.5"><animateMotion dur="0.8s" repeatCount="indefinite" begin="0s"><mpath href="#mpathWS"/></animateMotion></circle>
+    <circle class="particle" r="3"><animateMotion dur="0.8s" repeatCount="indefinite" begin="0.4s"><mpath href="#mpathWS"/></animateMotion></circle>
+    <!-- HTTP segment -->
+    <circle class="particle" r="3.5"><animateMotion dur="1.2s" repeatCount="indefinite" begin="0s"><mpath href="#mpathHTTP"/></animateMotion></circle>
+    <circle class="particle" r="3"><animateMotion dur="1.2s" repeatCount="indefinite" begin="0.4s"><mpath href="#mpathHTTP"/></animateMotion></circle>
+    <circle class="particle" r="2.5"><animateMotion dur="1.2s" repeatCount="indefinite" begin="0.8s"><mpath href="#mpathHTTP"/></animateMotion></circle>
+    <!-- Traefik → Service -->
+    <circle class="particle" r="3"><animateMotion dur="0.6s" repeatCount="indefinite" begin="0s"><mpath href="#mpathTraefikSvc"/></animateMotion></circle>
+    <circle class="particle" r="2.5"><animateMotion dur="0.6s" repeatCount="indefinite" begin="0.3s"><mpath href="#mpathTraefikSvc"/></animateMotion></circle>
+    <!-- Service → Pods -->
+    <circle class="particle" r="3"><animateMotion dur="0.5s" repeatCount="indefinite" begin="0s"><mpath href="#mpathSvcPods"/></animateMotion></circle>
+    <circle class="particle" r="2.5"><animateMotion dur="0.5s" repeatCount="indefinite" begin="0.25s"><mpath href="#mpathSvcPods"/></animateMotion></circle>
+</g>
+
+<!-- WS upward particles (metrics sent to browser — always when connected) -->
+<g id="archWSUpParticles" style="display:none;">
+    <circle class="particle-metrics" r="2.5"><animateMotion dur="0.9s" repeatCount="indefinite" begin="0s"><mpath href="#mpathWSUp"/></animateMotion></circle>
+    <circle class="particle-metrics" r="2"><animateMotion dur="0.9s" repeatCount="indefinite" begin="0.45s"><mpath href="#mpathWSUp"/></animateMotion></circle>
+</g>
+
+<!-- Metrics flow particles (always visible when cluster up) -->
+<g id="archMetricsParticles" style="display:none;">
+    <!-- K8s API segment (upward to backend) -->
+    <circle class="particle-metrics" r="3"><animateMotion dur="1.4s" repeatCount="indefinite" begin="0s" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#mpathK8sAPI"/></animateMotion></circle>
+    <circle class="particle-metrics" r="2.5"><animateMotion dur="1.4s" repeatCount="indefinite" begin="0.7s" keyPoints="1;0" keyTimes="0;1" calcMode="linear"><mpath href="#mpathK8sAPI"/></animateMotion></circle>
+    <!-- metrics-server → HPA (vertical) -->
+    <circle class="particle-metrics" r="2.5"><animateMotion dur="0.7s" repeatCount="indefinite" begin="0s"><mpath href="#mpathMetricsHPA"/></animateMotion></circle>
+    <!-- HORIZONTAL: Pods → metrics-server (curved right+up) -->
+    <circle class="particle-metrics" r="3"><animateMotion dur="1.6s" repeatCount="indefinite" begin="0s"><mpath href="#mpathPodsToMetrics"/></animateMotion></circle>
+    <circle class="particle-metrics" r="2.5"><animateMotion dur="1.6s" repeatCount="indefinite" begin="0.55s"><mpath href="#mpathPodsToMetrics"/></animateMotion></circle>
+    <circle class="particle-metrics" r="2"><animateMotion dur="1.6s" repeatCount="indefinite" begin="1.1s"><mpath href="#mpathPodsToMetrics"/></animateMotion></circle>
+</g>
+
+<!-- Scaling particles (visible when HPA is scaling) -->
+<g id="archScalingParticles" style="display:none;">
+    <!-- HPA → Pods (diagonal) -->
+    <circle class="particle-scaling" r="3.5"><animateMotion dur="1s" repeatCount="indefinite" begin="0s"><mpath href="#mpathHPAPods"/></animateMotion></circle>
+    <circle class="particle-scaling" r="3"><animateMotion dur="1s" repeatCount="indefinite" begin="0.5s"><mpath href="#mpathHPAPods"/></animateMotion></circle>
+    <!-- HORIZONTAL: HPA → Service (scale replicas feedback) -->
+    <circle class="particle-scaling" r="3"><animateMotion dur="1.2s" repeatCount="indefinite" begin="0s"><mpath href="#mpathHPAToSvc"/></animateMotion></circle>
+    <circle class="particle-scaling" r="2.5"><animateMotion dur="1.2s" repeatCount="indefinite" begin="0.4s"><mpath href="#mpathHPAToSvc"/></animateMotion></circle>
+    <circle class="particle-scaling" r="2"><animateMotion dur="1.2s" repeatCount="indefinite" begin="0.8s"><mpath href="#mpathHPAToSvc"/></animateMotion></circle>
+</g>
+
+<!-- ===== LIVE METRICS OVERLAY ===== -->
+<g id="archLivePanel" transform="translate(130, 622)">
+    <rect x="0" y="0" width="700" height="36" rx="8" fill="#1a1f23" stroke="#2a3238" stroke-width="1"/>
+    <!-- Status indicator -->
+    <circle id="archStatusDot" cx="20" cy="18" r="4" fill="#e74c4c"/>
+    <text id="archStatusLabel" x="32" y="22" fill="#7c8a94" font-size="10" font-weight="600" class="label-mono">PAUSED</text>
+    <!-- Metrics -->
+    <text x="130" y="22" fill="#7c8a94" font-size="9" font-weight="500">RPS</text>
+    <text id="archPanelRps" x="155" y="22" fill="#20e492" font-size="10" font-weight="700" class="label-mono">0</text>
+    <text x="210" y="22" fill="#7c8a94" font-size="9" font-weight="500">REPLICAS</text>
+    <text id="archPanelReplicas" x="270" y="22" fill="#4ca4f5" font-size="10" font-weight="700" class="label-mono">0/0</text>
+    <text x="340" y="22" fill="#7c8a94" font-size="9" font-weight="500">AVG</text>
+    <text id="archPanelAvg" x="365" y="22" fill="#20e492" font-size="10" font-weight="700" class="label-mono">0 ms</text>
+    <text x="440" y="22" fill="#7c8a94" font-size="9" font-weight="500">CPU</text>
+    <text id="archPanelCpu" x="465" y="22" fill="#8b7cf6" font-size="10" font-weight="700" class="label-mono">0%</text>
+</g>
+
+</svg>
+
+<!-- Legend -->
+<div class="arch-legend">
+    <div class="arch-legend-item"><div class="arch-legend-line request"></div> Request flow</div>
+    <div class="arch-legend-item"><div class="arch-legend-line metrics"></div> Metrics / monitoring</div>
+    <div class="arch-legend-item"><div class="arch-legend-line scaling"></div> Autoscaling</div>
+</div>
+</div>
+</div><!-- /split-arch -->
+
+<!-- ==================== MONITORING (right column) ==================== -->
+<div class="split-monitor">
+<div class="charts-stack">
+    <div class="chart-card main">
+        <h3>Response Times</h3>
+        <canvas id="chartResponseTimes"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>Active Replicas</h3>
+        <canvas id="chartReplicas"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>CPU Utilization (avg)</h3>
+        <canvas id="chartCpu"></canvas>
+    </div>
+</div>
+</div><!-- /split-monitor -->
+
+</div><!-- /split-view -->
+
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let ws = null;
+let isRunning = false;
+const MAX_POINTS = 300;
+
+// ============================================================
+//  CHART SETUP
+// ============================================================
+const chartColors = {
+    bg: '#111518', grid: '#222a2f', text: '#7c8a94',
+    green: '#20e492', yellow: '#f5a623', red: '#e74c4c',
+    blue: '#4ca4f5', accent: '#8b7cf6',
+};
+
+const commonScaleOpts = {
+    x: {
+        type: 'time',
+        time: { unit: 'second', displayFormats: { second: 'HH:mm:ss' }, tooltipFormat: 'HH:mm:ss' },
+        grid: { color: chartColors.grid },
+        ticks: { color: chartColors.text, maxTicksLimit: 8, font: { size: 10 } },
+    },
+};
+
+function makeYScale(opts = {}) {
+    return { beginAtZero: true, grid: { color: chartColors.grid }, ticks: { color: chartColors.text, font: { size: 10 }, ...opts } };
+}
+
+const responseTimes = new Chart(document.getElementById('chartResponseTimes'), {
+    type: 'line',
+    data: { datasets: [
+        { label: 'Avg', borderColor: chartColors.green, backgroundColor: chartColors.green + '15', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: true },
+        { label: 'P90', borderColor: chartColors.yellow, backgroundColor: chartColors.yellow + '10', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: false },
+        { label: 'P99', borderColor: chartColors.red, backgroundColor: chartColors.red + '10', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: false },
+    ]},
+    options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        plugins: { legend: { labels: { color: chartColors.text, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: "'Inter', sans-serif" }, padding: 16 } } },
+        scales: { ...commonScaleOpts, y: { ...makeYScale(), title: { display: true, text: 'ms', color: chartColors.text, font: { size: 10 } } } },
+    },
+});
+
+const replicasChart = new Chart(document.getElementById('chartReplicas'), {
+    type: 'line',
+    data: { datasets: [
+        { label: 'Running', borderColor: chartColors.green, backgroundColor: chartColors.green + '12', data: [], stepped: 'before', pointRadius: 0, borderWidth: 1.5, fill: true },
+        { label: 'Desired', borderColor: chartColors.text, data: [], stepped: 'before', pointRadius: 0, borderWidth: 1, borderDash: [5, 3], fill: false },
+    ]},
+    options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        plugins: { legend: { labels: { color: chartColors.text, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: "'Inter', sans-serif" }, padding: 12 } } },
+        scales: { ...commonScaleOpts, y: { ...makeYScale({ stepSize: 1 }), title: { display: true, text: 'pods', color: chartColors.text } } },
+    },
+});
+
+const cpuChart = new Chart(document.getElementById('chartCpu'), {
+    type: 'line',
+    data: { datasets: [
+        { label: 'Avg CPU %', borderColor: chartColors.accent, backgroundColor: chartColors.accent + '12', data: [], tension: 0.4, pointRadius: 0, borderWidth: 1.5, fill: true },
+    ]},
+    options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        plugins: { legend: { labels: { color: chartColors.text, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: "'Inter', sans-serif" }, padding: 12 } } },
+        scales: { ...commonScaleOpts, y: { ...makeYScale({ callback: v => v + '%' }), suggestedMax: 100, title: { display: true, text: '%', color: chartColors.text } } },
+    },
+});
+
+// ============================================================
+//  WEBSOCKET
+// ============================================================
+function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => {
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('statusText').textContent = 'Connected';
+    };
+    ws.onclose = () => {
+        document.getElementById('statusDot').classList.remove('connected');
+        document.getElementById('statusText').textContent = 'Disconnected';
+        setTimeout(connect, 3000);
+    };
+    ws.onerror = () => ws.close();
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'metrics') {
+            updateDashboard(data);
+            updateArchitecture(data);
+        }
+    };
+}
+
+function send(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+}
+
+// ============================================================
+//  MONITORING CONTROLS
+// ============================================================
+function toggleLoad() {
+    isRunning = !isRunning;
+    send({ action: isRunning ? 'start' : 'pause' });
+    updateToggleBtn();
+}
+
+function updateToggleBtn() {
+    const btn = document.getElementById('toggleBtn');
+    btn.textContent = isRunning ? 'Pause' : 'Start';
+    btn.className = isRunning ? 'btn btn-pause' : 'btn btn-start';
+}
+
+function onRpsChange(value) {
+    document.getElementById('rpsValue').textContent = value;
+    send({ action: 'set_rps', value: parseFloat(value) });
+}
+
+function onUrlChange(value) {
+    send({ action: 'set_url', value: value });
+}
+
+// ============================================================
+//  MONITORING UPDATE
+// ============================================================
+function updateDashboard(data) {
+    const now = new Date(data.timestamp * 1000);
+    if (data.load.is_running !== isRunning) { isRunning = data.load.is_running; updateToggleBtn(); }
+
+    pushPoint(responseTimes, 0, now, data.response_times.avg_ms);
+    pushPoint(responseTimes, 1, now, data.response_times.p90_ms);
+    pushPoint(responseTimes, 2, now, data.response_times.p99_ms);
+    responseTimes.update('none');
+
+    pushPoint(replicasChart, 0, now, data.cluster.replicas);
+    pushPoint(replicasChart, 1, now, data.cluster.hpa_desired);
+    replicasChart.update('none');
+
+    const avgCpu = data.cluster.pods.length > 0
+        ? data.cluster.pods.reduce((sum, p) => sum + p.cpu_percent, 0) / data.cluster.pods.length : 0;
+    pushPoint(cpuChart, 0, now, avgCpu);
+    cpuChart.update('none');
+
+}
+
+function pushPoint(chart, idx, x, y) {
+    const ds = chart.data.datasets[idx];
+    ds.data.push({ x, y });
+    if (ds.data.length > MAX_POINTS) ds.data.shift();
+}
+
+
+// ============================================================
+//  ARCHITECTURE VIEW UPDATE
+// ============================================================
+let prevPodCount = 0;
+
+function updateArchitecture(data) {
+    const running = data.load.is_running;
+    const pods = data.cluster.pods;
+    const replicas = data.cluster.replicas;
+    const desired = data.cluster.hpa_desired;
+    const isScaling = desired > replicas;
+    const avgCpu = pods.length > 0
+        ? pods.reduce((s, p) => s + p.cpu_percent, 0) / pods.length : 0;
+
+    // --- Toggle animated connections ---
+    const reqConns = ['connWS', 'connHTTP', 'connTraefikSvc', 'connSvcPods'];
+    reqConns.forEach(id => {
+        document.getElementById(id).classList.toggle('active', running);
+    });
+
+    const metricsConns = ['connK8sAPI', 'connMetricsHPA', 'connPodsToMetrics'];
+    metricsConns.forEach(id => {
+        document.getElementById(id).classList.toggle('active', pods.length > 0);
+    });
+
+    const scalingConns = ['connHPAPods', 'connHPAToSvc'];
+    scalingConns.forEach(id => {
+        document.getElementById(id).classList.toggle('active', isScaling);
+    });
+
+    // --- Toggle particles ---
+    document.getElementById('archRequestParticles').style.display = running ? '' : 'none';
+    document.getElementById('archWSUpParticles').style.display = pods.length > 0 ? '' : 'none';
+    document.getElementById('archMetricsParticles').style.display = pods.length > 0 ? '' : 'none';
+    document.getElementById('archScalingParticles').style.display = isScaling ? '' : 'none';
+
+    // --- Toggle horizontal flow labels ---
+    document.getElementById('archLabelPodsMetrics').setAttribute('opacity', pods.length > 0 ? '1' : '0');
+    document.getElementById('archLabelHPASvc').setAttribute('opacity', isScaling ? '1' : '0');
+
+    // --- Scale label ---
+    const scaleLabel = document.getElementById('archScaleLabel');
+    scaleLabel.setAttribute('opacity', isScaling ? '1' : '0');
+    if (isScaling) scaleLabel.textContent = `scaling ${replicas} → ${desired}`;
+
+    // --- Pulse active components ---
+    document.getElementById('archLoadGen').classList.toggle('arch-box-active', running);
+
+    // --- Update metric labels ---
+    document.getElementById('archLabelRps').textContent = running ? data.load.actual_rps + ' rps' : '0 rps';
+    document.getElementById('archLabelAvg').textContent = data.response_times.avg_ms.toFixed(0) + ' ms';
+    const cpuInt = data.cluster.hpa_current_cpu;
+    document.getElementById('archLabelHPA').textContent = cpuInt != null ? `CPU ${cpuInt}%/50%` : 'CPU 50%';
+
+    // --- Live panel ---
+    const dot = document.getElementById('archStatusDot');
+    const lbl = document.getElementById('archStatusLabel');
+    dot.setAttribute('fill', running ? '#20e492' : '#e74c4c');
+    lbl.textContent = running ? 'RUNNING' : 'PAUSED';
+    lbl.setAttribute('fill', running ? '#20e492' : '#7c8a94');
+
+    document.getElementById('archPanelRps').textContent = data.load.actual_rps;
+    document.getElementById('archPanelReplicas').textContent = replicas + '/' + desired;
+    document.getElementById('archPanelAvg').textContent = data.response_times.avg_ms.toFixed(0) + ' ms';
+    document.getElementById('archPanelCpu').textContent = avgCpu.toFixed(0) + '%';
+
+    // --- Render pods ---
+    renderArchPods(pods, desired);
+}
+
+function renderArchPods(pods, desired) {
+    const container = document.getElementById('archPods');
+    const count = Math.max(pods.length, 1);
+
+    // Skip full re-render if pod count unchanged — just update metrics
+    if (count === prevPodCount && pods.length > 0) {
+        pods.forEach((pod, i) => {
+            const fill = document.getElementById('archPodFill' + i);
+            const cpuText = document.getElementById('archPodCpu' + i);
+            const cpuBar = document.getElementById('archPodCpuBar' + i);
+            if (fill) {
+                const color = pod.cpu_percent > 80 ? '#e74c4c' : pod.cpu_percent > 50 ? '#f5a623' : '#20e492';
+                fill.setAttribute('fill', color);
+                fill.setAttribute('fill-opacity', '0.15');
+                if (cpuBar) { cpuBar.setAttribute('width', Math.min(64, pod.cpu_percent * 0.64)); cpuBar.setAttribute('fill', color); }
+            }
+            if (cpuText) { cpuText.textContent = pod.cpu_percent.toFixed(0) + '%'; }
+        });
+        return;
+    }
+    prevPodCount = count;
+
+    // Pod dimensions
+    const podW = count <= 6 ? 100 : 80;
+    const podH = 72;
+    const gap = count <= 6 ? 12 : 6;
+    const totalW = count * podW + (count - 1) * gap;
+    const startX = 480 - totalW / 2;
+    const podY = 476;
+
+    // Fixed-width container box spanning the cluster
+    const boxX = 140;
+    const boxY = 450;
+    const boxW = 680;
+    const boxH = podY + podH + 14 - boxY;
+
+    let html = '';
+    // Container box
+    html += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="10" fill="#13181c" stroke="#2a3238" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+    // Box label
+    html += `<g transform="translate(${boxX + 10}, ${boxY + 14})">
+        <rect x="0" y="0" width="10" height="7" rx="1.5" fill="none" stroke="#7c8a94" stroke-width="1"/>
+        <circle cx="5" cy="3.5" r="1.2" fill="#7c8a94"/>
+    </g>`;
+    html += `<text x="${boxX + 26}" y="${boxY + 14}" fill="#7c8a94" font-size="9" font-weight="600" class="label-mono">Pods</text>`;
+    html += `<text x="${boxX + 55}" y="${boxY + 14}" fill="#3d4854" font-size="9" class="label-mono">${count} replica${count > 1 ? 's' : ''}</text>`;
+
+    // Individual pods inside the box
+    for (let i = 0; i < count; i++) {
+        const pod = pods[i] || { name: 'pending...', cpu_percent: 0, memory_mb: 0, status: 'Pending' };
+        const px = startX + i * (podW + gap);
+        const color = pod.cpu_percent > 80 ? '#e74c4c' : pod.cpu_percent > 50 ? '#f5a623' : '#20e492';
+        const statusColor = pod.status === 'Running' ? '#20e492' : '#f5a623';
+        const shortName = pod.name.length > 12 ? pod.name.slice(-10) : pod.name;
+        const delay = i * 0.08;
+
+        html += `<g class="arch-pod" style="animation-delay:${delay}s">
+            <rect x="${px}" y="${podY}" width="${podW}" height="${podH}" rx="6" fill="#1a1f23" stroke="#2a3238" stroke-width="1"/>
+            <rect id="archPodFill${i}" x="${px}" y="${podY}" width="${podW}" height="${podH}" rx="6" fill="${color}" fill-opacity="0.15"/>
+            <g transform="translate(${px + 8}, ${podY + 10})">
+                <rect x="0" y="0" width="10" height="7" rx="1.5" fill="none" stroke="${statusColor}" stroke-width="1"/>
+                <circle cx="5" cy="3.5" r="1.2" fill="${statusColor}"/>
+            </g>
+            <text x="${px + 22}" y="${podY + 16}" fill="#e8eaed" font-size="${count <= 6 ? 8 : 7}" class="label-mono">${shortName}</text>
+            <rect x="${px + 8}" y="${podY + 28}" width="64" height="3" rx="1.5" fill="#2a3238"/>
+            <rect id="archPodCpuBar${i}" x="${px + 8}" y="${podY + 28}" width="${Math.min(64, pod.cpu_percent * 0.64)}" height="3" rx="1.5" fill="${color}"/>
+            <text id="archPodCpu${i}" x="${px + 8}" y="${podY + 44}" fill="${color}" font-size="9" font-weight="700" class="label-mono">${pod.cpu_percent.toFixed(0)}%</text>
+            <text x="${px + 8}" y="${podY + 58}" fill="#7c8a94" font-size="8" class="label-mono">${pod.memory_mb.toFixed(0)} MB</text>
+            <circle cx="${px + podW - 10}" cy="${podY + 12}" r="3" fill="${statusColor}" opacity="0.8"/>
+        </g>`;
+    }
+
+    container.innerHTML = html;
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+connect();
+// Render initial empty architecture state
+renderArchPods([{ name: 'python-api-...', cpu_percent: 0, memory_mb: 0, status: 'Pending' }], 1);
+</script>
+
+</body>
+</html>

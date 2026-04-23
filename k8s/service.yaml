@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-api
+  namespace: default
+spec:
+  selector:
+    app: python-api
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: ClusterIP

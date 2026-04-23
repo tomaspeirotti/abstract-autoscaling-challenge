@@ -37,6 +37,76 @@
         <input type="text" id="targetUrl" value="http://localhost:8080/work" onchange="onUrlChange(this.value)">
     </div>
 </div>
+
+<!-- ==================== CLUSTER CONFIG PANEL ==================== -->
+<div class="cluster-config" id="clusterConfig">
+    <div class="cc-header" onclick="toggleConfigPanel()">
+        <span class="cc-toggle" id="ccToggle">▸</span>
+        <span class="cc-title">Cluster config</span>
+        <span class="cc-spacer"></span>
+        <span class="cc-badge" id="ccBadge" data-state="synced">
+            <span class="cc-badge-dot"></span>
+            <span class="cc-badge-label" id="ccBadgeLabel">Synced</span>
+        </span>
+    </div>
+    <div class="cc-body" id="ccBody" hidden>
+        <div class="cc-warning" id="ccWarning" hidden>
+            ⚠ Pause the load generator to edit these values.
+        </div>
+        <div class="cc-group">
+            <div class="cc-group-title">HPA</div>
+            <div class="cc-grid">
+                <label class="cc-field">
+                    <span>min replicas</span>
+                    <input type="range" id="ccMinReplicas" min="1" max="10" step="1"
+                           oninput="onConfigInput('min_replicas', this.value)">
+                    <span class="cc-value" id="ccMinReplicasValue">—</span>
+                </label>
+                <label class="cc-field">
+                    <span>max replicas</span>
+                    <input type="range" id="ccMaxReplicas" min="1" max="20" step="1"
+                           oninput="onConfigInput('max_replicas', this.value)">
+                    <span class="cc-value" id="ccMaxReplicasValue">—</span>
+                </label>
+                <label class="cc-field">
+                    <span>target CPU %</span>
+                    <input type="range" id="ccTargetCpu" min="10" max="100" step="1"
+                           oninput="onConfigInput('target_cpu_utilization', this.value)">
+                    <span class="cc-value" id="ccTargetCpuValue">—</span>
+                </label>
+                <label class="cc-field">
+                    <span>target memory %</span>
+                    <input type="range" id="ccTargetMem" min="10" max="100" step="1"
+                           oninput="onConfigInput('target_memory_utilization', this.value)">
+                    <span class="cc-value" id="ccTargetMemValue">—</span>
+                </label>
+            </div>
+        </div>
+        <div class="cc-group">
+            <div class="cc-group-title">Deployment</div>
+            <div class="cc-grid">
+                <label class="cc-field">
+                    <span>cpu request (m)</span>
+                    <input type="range" id="ccCpuRequest" min="50" max="1000" step="10"
+                           oninput="onConfigInput('cpu_request_millicores', this.value)">
+                    <span class="cc-value" id="ccCpuRequestValue">—</span>
+                </label>
+                <label class="cc-field">
+                    <span>cpu limit (m)</span>
+                    <input type="range" id="ccCpuLimit" min="50" max="2000" step="10"
+                           oninput="onConfigInput('cpu_limit_millicores', this.value)">
+                    <span class="cc-value" id="ccCpuLimitValue">—</span>
+                </label>
+            </div>
+        </div>
+        <div class="cc-errors" id="ccErrors"></div>
+        <div class="cc-actions">
+            <button class="cc-btn cc-btn-secondary" id="ccResetBtn" onclick="onConfigReset()">Reset to defaults</button>
+            <button class="cc-btn cc-btn-primary" id="ccApplyBtn" onclick="onConfigApply()" disabled>Apply</button>
+        </div>
+    </div>
+</div>
+
 <div class="arch-container">
 <svg viewBox="0 0 960 680" class="arch-svg" xmlns="http://www.w3.org/2000/svg">
 <defs>

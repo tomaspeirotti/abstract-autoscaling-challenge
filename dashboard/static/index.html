@@ -25,88 +25,101 @@
 
 <!-- ==================== ARCHITECTURE (left column) ==================== -->
 <div class="split-arch">
-<div class="arch-controls">
-    <button class="btn btn-start" id="toggleBtn" onclick="toggleLoad()">Start</button>
-    <div class="slider-group">
-        <label>RPS</label>
-        <input type="range" id="rpsSlider" min="1" max="500" value="10" oninput="onRpsChange(this.value)">
-        <span class="rps-value" id="rpsValue">10</span>
-    </div>
-    <div class="url-input">
-        <label>Target</label>
-        <input type="text" id="targetUrl" value="http://localhost:8080/work" onchange="onUrlChange(this.value)">
-    </div>
-</div>
+<!-- ==================== CONTROL PANEL ==================== -->
+<div class="control-panel">
 
-<!-- ==================== CLUSTER CONFIG PANEL ==================== -->
-<div class="cluster-config" id="clusterConfig">
-    <div class="cc-header" onclick="toggleConfigPanel()">
-        <span class="cc-toggle" id="ccToggle">▸</span>
-        <span class="cc-title">Cluster config</span>
-        <span class="cc-spacer"></span>
-        <span class="cc-badge" id="ccBadge" data-state="synced">
-            <span class="cc-badge-dot"></span>
-            <span class="cc-badge-label" id="ccBadgeLabel">Synced</span>
-        </span>
-    </div>
-    <div class="cc-body" id="ccBody" hidden>
-        <div class="cc-warning" id="ccWarning" hidden>
-            ⚠ Pause the load generator to edit these values.
+    <!-- Section: Carga (load generator) -->
+    <section class="cp-section cp-section-load">
+        <header class="cp-section-head">
+            <span class="cp-section-title">Carga</span>
+            <span class="cp-section-hint">generador de tráfico</span>
+        </header>
+        <div class="cp-row">
+            <button class="cp-btn cp-btn-primary" id="toggleBtn" onclick="toggleLoad()">Start</button>
+            <label class="cp-field cp-field-inline">
+                <span class="cp-field-label" data-tooltip="Requests por segundo. Se aplica en tiempo real al generador, sin reiniciarlo.">RPS</span>
+                <input type="range" id="rpsSlider" min="1" max="500" value="10" oninput="onRpsChange(this.value)">
+                <span class="cp-field-value" id="rpsValue">10</span>
+            </label>
+            <label class="cp-field cp-field-url">
+                <span class="cp-field-label" data-tooltip="Endpoint que recibe la carga (POST). Por defecto apunta al ingress Traefik del cluster k3d.">Target</span>
+                <input type="text" id="targetUrl" value="http://localhost:8080/work" onchange="onUrlChange(this.value)">
+            </label>
         </div>
-        <div class="cc-columns">
-        <div class="cc-group">
-            <div class="cc-group-title">HPA</div>
-            <div class="cc-grid">
-                <label class="cc-field">
-                    <span title="Minimum pods the HPA keeps running, even at zero load.">min replicas</span>
-                    <input type="range" id="ccMinReplicas" min="1" max="10" step="1"
-                           oninput="onConfigInput('min_replicas', this.value)">
-                    <span class="cc-value" id="ccMinReplicasValue"></span>
-                </label>
-                <label class="cc-field">
-                    <span title="Upper cap for autoscaling. The HPA will never scale beyond this, even under heavy load.">max replicas</span>
-                    <input type="range" id="ccMaxReplicas" min="1" max="20" step="1"
-                           oninput="onConfigInput('max_replicas', this.value)">
-                    <span class="cc-value" id="ccMaxReplicasValue"></span>
-                </label>
-                <label class="cc-field">
-                    <span title="Average CPU utilization (as % of the pod's CPU request) that triggers the HPA to add replicas.">target CPU %</span>
-                    <input type="range" id="ccTargetCpu" min="10" max="100" step="1"
-                           oninput="onConfigInput('target_cpu_utilization', this.value)">
-                    <span class="cc-value" id="ccTargetCpuValue"></span>
-                </label>
-                <label class="cc-field">
-                    <span title="Average memory utilization (as % of the pod's memory request) that triggers scaling. Secondary signal alongside CPU.">target memory %</span>
-                    <input type="range" id="ccTargetMem" min="10" max="100" step="1"
-                           oninput="onConfigInput('target_memory_utilization', this.value)">
-                    <span class="cc-value" id="ccTargetMemValue"></span>
-                </label>
+    </section>
+
+    <!-- Section: Cluster config (collapsible) -->
+    <section class="cp-section cp-section-cluster" id="clusterConfig">
+        <header class="cp-section-head cp-section-head-clickable" onclick="toggleConfigPanel()">
+            <span class="cp-toggle" id="ccToggle">▸</span>
+            <span class="cp-section-title">Cluster</span>
+            <span class="cp-section-hint">HPA + Deployment</span>
+            <span class="cp-spacer"></span>
+            <span class="cc-badge" id="ccBadge" data-state="synced">
+                <span class="cc-badge-dot"></span>
+                <span class="cc-badge-label" id="ccBadgeLabel">Synced</span>
+            </span>
+        </header>
+        <div class="cp-section-body" id="ccBody" hidden>
+            <div class="cc-warning" id="ccWarning" hidden>
+                ⚠ Pausá el generador de carga para editar estos valores.
+            </div>
+            <div class="cc-columns">
+                <div class="cc-group">
+                    <div class="cc-group-title">HPA</div>
+                    <div class="cc-grid">
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Pods mínimos que el HPA mantiene activos, incluso sin carga.">min replicas</span>
+                            <input type="range" id="ccMinReplicas" min="1" max="10" step="1"
+                                   oninput="onConfigInput('min_replicas', this.value)">
+                            <span class="cc-value" id="ccMinReplicasValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Techo del autoscaling. El HPA nunca escala por encima de este número, aunque haya carga alta.">max replicas</span>
+                            <input type="range" id="ccMaxReplicas" min="1" max="20" step="1"
+                                   oninput="onConfigInput('max_replicas', this.value)">
+                            <span class="cc-value" id="ccMaxReplicasValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Utilización de CPU promedio (relativa al request del pod) que gatilla al HPA a agregar replicas.">target CPU %</span>
+                            <input type="range" id="ccTargetCpu" min="10" max="100" step="1"
+                                   oninput="onConfigInput('target_cpu_utilization', this.value)">
+                            <span class="cc-value" id="ccTargetCpuValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Utilización de memoria promedio (relativa al request del pod). Señal secundaria, junto con CPU.">target memory %</span>
+                            <input type="range" id="ccTargetMem" min="10" max="100" step="1"
+                                   oninput="onConfigInput('target_memory_utilization', this.value)">
+                            <span class="cc-value" id="ccTargetMemValue"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="cc-group">
+                    <div class="cc-group-title">Deployment</div>
+                    <div class="cc-grid">
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="CPU garantizada por pod en millicores (1000m = 1 core). Además es el denominador del cálculo de utilización del HPA.">cpu request (m)</span>
+                            <input type="range" id="ccCpuRequest" min="50" max="1000" step="10"
+                                   oninput="onConfigInput('cpu_request_millicores', this.value)">
+                            <span class="cc-value" id="ccCpuRequestValue"></span>
+                        </label>
+                        <label class="cc-field">
+                            <span class="cp-field-label" data-tooltip="Techo duro de CPU por pod. El kernel throttlea arriba de este valor. Debe ser ≥ request.">cpu limit (m)</span>
+                            <input type="range" id="ccCpuLimit" min="50" max="2000" step="10"
+                                   oninput="onConfigInput('cpu_limit_millicores', this.value)">
+                            <span class="cc-value" id="ccCpuLimitValue"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="cc-errors" id="ccErrors"></div>
+            <div class="cc-actions">
+                <button class="cc-btn cc-btn-secondary" id="ccResetBtn" onclick="onConfigReset()">Reset</button>
+                <button class="cc-btn cc-btn-primary" id="ccApplyBtn" onclick="onConfigApply()" disabled>Apply</button>
             </div>
         </div>
-        <div class="cc-group">
-            <div class="cc-group-title">Deployment</div>
-            <div class="cc-grid">
-                <label class="cc-field">
-                    <span title="Guaranteed CPU per pod in millicores (1000m = 1 core). Also the denominator for the HPA's CPU utilization math.">cpu request (m)</span>
-                    <input type="range" id="ccCpuRequest" min="50" max="1000" step="10"
-                           oninput="onConfigInput('cpu_request_millicores', this.value)">
-                    <span class="cc-value" id="ccCpuRequestValue"></span>
-                </label>
-                <label class="cc-field">
-                    <span title="Hard CPU ceiling per pod. Consumption above the limit is throttled by the kernel; lower than request ≤ limit is required.">cpu limit (m)</span>
-                    <input type="range" id="ccCpuLimit" min="50" max="2000" step="10"
-                           oninput="onConfigInput('cpu_limit_millicores', this.value)">
-                    <span class="cc-value" id="ccCpuLimitValue"></span>
-                </label>
-            </div>
-        </div>
-        </div>
-        <div class="cc-errors" id="ccErrors"></div>
-        <div class="cc-actions">
-            <button class="cc-btn cc-btn-secondary" id="ccResetBtn" onclick="onConfigReset()">Reset to defaults</button>
-            <button class="cc-btn cc-btn-primary" id="ccApplyBtn" onclick="onConfigApply()" disabled>Apply</button>
-        </div>
-    </div>
+    </section>
+
 </div>
 
 <div class="arch-container">
@@ -597,7 +610,7 @@ function toggleLoad() {
 function updateToggleBtn() {
     const btn = document.getElementById('toggleBtn');
     btn.textContent = isRunning ? 'Pause' : 'Start';
-    btn.className = isRunning ? 'btn btn-pause' : 'btn btn-start';
+    btn.className = isRunning ? 'cp-btn cp-btn-pause' : 'cp-btn cp-btn-primary';
 }
 
 function onRpsChange(value) {

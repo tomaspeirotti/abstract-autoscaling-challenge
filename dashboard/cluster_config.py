@@ -160,8 +160,8 @@ class ClusterConfigManager:
 
         container = dep.spec.template.spec.containers[0]
         resources = container.resources
-        cpu_request = _parse_cpu_millicores(resources.requests.get("cpu", "100m"))
-        cpu_limit = _parse_cpu_millicores(resources.limits.get("cpu", "500m"))
+        cpu_request = _parse_cpu_millicores((resources.requests or {}).get("cpu", "100m"))
+        cpu_limit = _parse_cpu_millicores((resources.limits or {}).get("cpu", "500m"))
 
         return ClusterConfig(
             min_replicas=int(hpa.spec.min_replicas),

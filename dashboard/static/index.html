@@ -730,6 +730,15 @@ function validateDraft(draft) {
     return errors;
 }
 
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function renderConfigPanel() {
     const draft = clusterConfig.draft;
     if (!draft) return;
@@ -761,10 +770,11 @@ function renderConfigPanel() {
     // Errors block
     const errorsDiv = document.getElementById('ccErrors');
     const errors = validateDraft(draft);
+    const escapedErrors = errors.map(e => `<div>${escapeHtml(e)}</div>`).join('');
     if (clusterConfig.error) {
-        errorsDiv.innerHTML = `<div>${clusterConfig.error}</div>` + errors.map(e => `<div>${e}</div>`).join('');
+        errorsDiv.innerHTML = `<div>${escapeHtml(clusterConfig.error)}</div>` + escapedErrors;
     } else {
-        errorsDiv.innerHTML = errors.map(e => `<div>${e}</div>`).join('');
+        errorsDiv.innerHTML = escapedErrors;
     }
 
     // Apply button enablement

@@ -454,6 +454,38 @@
 // ============================================================
 let ws = null;
 let isRunning = false;
+// ---- Cluster config state ----
+let clusterConfig = {
+    current: null,
+    defaults: null,
+    draft: null,
+    state: 'synced',   // 'synced' | 'modified' | 'applying' | 'error'
+    error: null,
+};
+const CC_RANGES = {
+    min_replicas:               [1, 10],
+    max_replicas:               [1, 20],
+    target_cpu_utilization:     [10, 100],
+    target_memory_utilization:  [10, 100],
+    cpu_request_millicores:     [50, 1000],
+    cpu_limit_millicores:       [50, 2000],
+};
+const CC_INPUT_IDS = {
+    min_replicas:              'ccMinReplicas',
+    max_replicas:              'ccMaxReplicas',
+    target_cpu_utilization:    'ccTargetCpu',
+    target_memory_utilization: 'ccTargetMem',
+    cpu_request_millicores:    'ccCpuRequest',
+    cpu_limit_millicores:      'ccCpuLimit',
+};
+const CC_VALUE_IDS = {
+    min_replicas:              'ccMinReplicasValue',
+    max_replicas:              'ccMaxReplicasValue',
+    target_cpu_utilization:    'ccTargetCpuValue',
+    target_memory_utilization: 'ccTargetMemValue',
+    cpu_request_millicores:    'ccCpuRequestValue',
+    cpu_limit_millicores:      'ccCpuLimitValue',
+};
 const MAX_POINTS = 300;
 
 // ============================================================
@@ -526,6 +558,7 @@ function connect() {
     ws.onopen = () => {
         document.getElementById('statusDot').classList.add('connected');
         document.getElementById('statusText').textContent = 'Connected';
+        send({ action: 'get_cluster_config' });
     };
     ws.onclose = () => {
         document.getElementById('statusDot').classList.remove('connected');
@@ -538,6 +571,10 @@ function connect() {
         if (data.type === 'metrics') {
             updateDashboard(data);
             updateArchitecture(data);
+        } else if (data.type === 'cluster_config') {
+            onClusterConfigReceived(data);
+        } else if (data.type === 'cluster_config_result') {
+            onClusterConfigResult(data);
         }
     };
 }
@@ -591,6 +628,8 @@ function updateDashboard(data) {
     pushPoint(cpuChart, 0, now, avgCpu);
     cpuChart.update('none');
 
+    // Re-render config panel so gating (disabled) tracks is_running.
+    renderConfigPanel();
 }
 
 function pushPoint(chart, idx, x, y) {
@@ -599,6 +638,150 @@ function pushPoint(chart, idx, x, y) {
     if (ds.data.length > MAX_POINTS) ds.data.shift();
 }
 
+
+// ============================================================
+//  CLUSTER CONFIG
+// ============================================================
+function toggleConfigPanel() {
+    const body = document.getElementById('ccBody');
+    const toggle = document.getElementById('ccToggle');
+    const wasHidden = body.hasAttribute('hidden');
+    if (wasHidden) {
+        body.removeAttribute('hidden');
+        toggle.classList.add('open');
+        toggle.textContent = '▾';
+    } else {
+        body.setAttribute('hidden', '');
+        toggle.classList.remove('open');
+        toggle.textContent = '▸';
+    }
+    localStorage.setItem('clusterConfigExpanded', wasHidden ? '1' : '0');
+}
+
+function onClusterConfigReceived(data) {
+    if (!data.current) return;
+    clusterConfig.current = { ...data.current };
+    clusterConfig.defaults = data.defaults ? { ...data.defaults } : null;
+    // Hydrate draft from current on first load or after successful apply
+    if (!clusterConfig.draft || clusterConfig.state !== 'modified') {
+        clusterConfig.draft = { ...data.current };
+    }
+    clusterConfig.error = null;
+    clusterConfig.state = computeState();
+    renderConfigPanel();
+}
+
+function onClusterConfigResult(data) {
+    if (data.status === 'ok') {
+        clusterConfig.state = 'applying';  // will be flipped to 'synced' when cluster_config arrives
+        clusterConfig.error = null;
+    } else {
+        clusterConfig.state = 'error';
+        clusterConfig.error = data.error || data.status;
+    }
+    renderConfigPanel();
+}
+
+function onConfigInput(field, rawValue) {
+    if (!clusterConfig.draft) return;
+    clusterConfig.draft[field] = parseInt(rawValue, 10);
+    clusterConfig.state = computeState();
+    clusterConfig.error = null;
+    renderConfigPanel();
+}
+
+function onConfigApply() {
+    if (clusterConfig.state !== 'modified') return;
+    if (validateDraft(clusterConfig.draft).length > 0) return;
+    clusterConfig.state = 'applying';
+    renderConfigPanel();
+    send({ action: 'apply_cluster_config', value: clusterConfig.draft });
+}
+
+function onConfigReset() {
+    clusterConfig.state = 'applying';
+    renderConfigPanel();
+    send({ action: 'reset_cluster_config' });
+}
+
+function computeState() {
+    if (!clusterConfig.current || !clusterConfig.draft) return 'synced';
+    const equal = Object.keys(CC_RANGES).every(
+        k => clusterConfig.draft[k] === clusterConfig.current[k]
+    );
+    return equal ? 'synced' : 'modified';
+}
+
+function validateDraft(draft) {
+    const errors = [];
+    if (!draft) return errors;
+    for (const [field, [lo, hi]] of Object.entries(CC_RANGES)) {
+        const v = draft[field];
+        if (!Number.isInteger(v) || v < lo || v > hi) {
+            errors.push(`${field} must be between ${lo} and ${hi}`);
+        }
+    }
+    if (draft.min_replicas > draft.max_replicas) {
+        errors.push(`min_replicas (${draft.min_replicas}) must be ≤ max_replicas (${draft.max_replicas})`);
+    }
+    if (draft.cpu_request_millicores > draft.cpu_limit_millicores) {
+        errors.push(`cpu_request (${draft.cpu_request_millicores}m) must be ≤ cpu_limit (${draft.cpu_limit_millicores}m)`);
+    }
+    return errors;
+}
+
+function renderConfigPanel() {
+    const draft = clusterConfig.draft;
+    if (!draft) return;
+
+    // Sliders + value labels
+    for (const field of Object.keys(CC_RANGES)) {
+        const input = document.getElementById(CC_INPUT_IDS[field]);
+        const label = document.getElementById(CC_VALUE_IDS[field]);
+        if (input) input.value = draft[field];
+        if (label) {
+            if (field === 'target_cpu_utilization' || field === 'target_memory_utilization') {
+                label.textContent = draft[field] + '%';
+            } else if (field.endsWith('_millicores')) {
+                label.textContent = draft[field] + 'm';
+            } else {
+                label.textContent = draft[field];
+            }
+        }
+    }
+
+    // Badge
+    const badge = document.getElementById('ccBadge');
+    const badgeLabel = document.getElementById('ccBadgeLabel');
+    badge.dataset.state = clusterConfig.state;
+    const labels = { synced: 'Synced', modified: 'Modified', applying: 'Applying…', error: 'Error' };
+    badgeLabel.textContent = labels[clusterConfig.state] || clusterConfig.state;
+    badge.title = clusterConfig.error || '';
+
+    // Errors block
+    const errorsDiv = document.getElementById('ccErrors');
+    const errors = validateDraft(draft);
+    if (clusterConfig.error) {
+        errorsDiv.innerHTML = `<div>${clusterConfig.error}</div>` + errors.map(e => `<div>${e}</div>`).join('');
+    } else {
+        errorsDiv.innerHTML = errors.map(e => `<div>${e}</div>`).join('');
+    }
+
+    // Apply button enablement
+    const applyBtn = document.getElementById('ccApplyBtn');
+    applyBtn.disabled = clusterConfig.state !== 'modified' || errors.length > 0 || isRunning;
+
+    // Reset enablement — disabled while applying or while load is running
+    const resetBtn = document.getElementById('ccResetBtn');
+    resetBtn.disabled = clusterConfig.state === 'applying' || isRunning;
+
+    // Gating (load running)
+    document.getElementById('ccWarning').hidden = !isRunning;
+    for (const field of Object.keys(CC_INPUT_IDS)) {
+        const el = document.getElementById(CC_INPUT_IDS[field]);
+        if (el) el.disabled = isRunning || clusterConfig.state === 'applying';
+    }
+}
 
 // ============================================================
 //  ARCHITECTURE VIEW UPDATE
@@ -751,6 +934,10 @@ function renderArchPods(pods, desired) {
 connect();
 // Render initial empty architecture state
 renderArchPods([{ name: 'python-api-...', cpu_percent: 0, memory_mb: 0, status: 'Pending' }], 1);
+// Restore panel expanded state
+if (localStorage.getItem('clusterConfigExpanded') === '1') {
+    toggleConfigPanel();
+}
 </script>
 
 </body>

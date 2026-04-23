@@ -88,3 +88,36 @@ def test_request_equals_limit_is_valid():
     cfg.cpu_request_millicores = 500
     cfg.cpu_limit_millicores = 500
     validate_config(cfg)
+
+
+from pathlib import Path
+
+from cluster_config import ClusterConfigManager
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_get_defaults_parses_yaml():
+    mgr = ClusterConfigManager(
+        namespace="default",
+        deployment_name="python-api",
+        hpa_name="python-api-hpa",
+        k8s_manifests_dir=FIXTURES,
+        k8s_monitor=None,  # not used by get_defaults
+    )
+    cfg = mgr.get_defaults()
+    assert cfg.min_replicas == 2
+    assert cfg.max_replicas == 8
+    assert cfg.target_cpu_utilization == 60
+    assert cfg.target_memory_utilization == 75
+    assert cfg.cpu_request_millicores == 100
+    assert cfg.cpu_limit_millicores == 500
+
+
+def test_parse_cpu_millicores_variants():
+    from cluster_config import _parse_cpu_millicores
+    assert _parse_cpu_millicores("500m") == 500
+    assert _parse_cpu_millicores("1") == 1000      # bare integer → cores
+    assert _parse_cpu_millicores(1) == 1000        # YAML may parse as int
+    assert _parse_cpu_millicores(0.5) == 500       # or float

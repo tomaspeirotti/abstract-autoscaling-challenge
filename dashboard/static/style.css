@@ -511,15 +511,24 @@ body {
 .cc-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px 16px;
+    gap: 10px 24px;
 }
 
 .cc-field {
     display: grid;
-    grid-template-columns: 110px 1fr 44px;
+    grid-template-columns: 140px 1fr 68px;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     font-size: 11px;
+    color: var(--text-dim);
+}
+
+.cc-field > span:first-child {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--text-dim);
 }
 
@@ -532,9 +541,18 @@ body {
 
 .cc-value {
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
     text-align: right;
+    letter-spacing: 0.02em;
+}
+
+.cc-value:empty::after {
+    content: '—';
+    color: var(--text-dim);
+    font-weight: 400;
+    opacity: 0.5;
 }
 
 .cc-errors {

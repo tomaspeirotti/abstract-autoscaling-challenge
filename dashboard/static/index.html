@@ -60,25 +60,25 @@
                     <span>min replicas</span>
                     <input type="range" id="ccMinReplicas" min="1" max="10" step="1"
                            oninput="onConfigInput('min_replicas', this.value)">
-                    <span class="cc-value" id="ccMinReplicasValue">—</span>
+                    <span class="cc-value" id="ccMinReplicasValue"></span>
                 </label>
                 <label class="cc-field">
                     <span>max replicas</span>
                     <input type="range" id="ccMaxReplicas" min="1" max="20" step="1"
                            oninput="onConfigInput('max_replicas', this.value)">
-                    <span class="cc-value" id="ccMaxReplicasValue">—</span>
+                    <span class="cc-value" id="ccMaxReplicasValue"></span>
                 </label>
                 <label class="cc-field">
                     <span>target CPU %</span>
                     <input type="range" id="ccTargetCpu" min="10" max="100" step="1"
                            oninput="onConfigInput('target_cpu_utilization', this.value)">
-                    <span class="cc-value" id="ccTargetCpuValue">—</span>
+                    <span class="cc-value" id="ccTargetCpuValue"></span>
                 </label>
                 <label class="cc-field">
                     <span>target memory %</span>
                     <input type="range" id="ccTargetMem" min="10" max="100" step="1"
                            oninput="onConfigInput('target_memory_utilization', this.value)">
-                    <span class="cc-value" id="ccTargetMemValue">—</span>
+                    <span class="cc-value" id="ccTargetMemValue"></span>
                 </label>
             </div>
         </div>
@@ -89,13 +89,13 @@
                     <span>cpu request (m)</span>
                     <input type="range" id="ccCpuRequest" min="50" max="1000" step="10"
                            oninput="onConfigInput('cpu_request_millicores', this.value)">
-                    <span class="cc-value" id="ccCpuRequestValue">—</span>
+                    <span class="cc-value" id="ccCpuRequestValue"></span>
                 </label>
                 <label class="cc-field">
                     <span>cpu limit (m)</span>
                     <input type="range" id="ccCpuLimit" min="50" max="2000" step="10"
                            oninput="onConfigInput('cpu_limit_millicores', this.value)">
-                    <span class="cc-value" id="ccCpuLimitValue">—</span>
+                    <span class="cc-value" id="ccCpuLimitValue"></span>
                 </label>
             </div>
         </div>

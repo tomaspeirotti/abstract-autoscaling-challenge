@@ -55,7 +55,7 @@ class K8sMonitor:
         self._namespace = namespace
         self._deployment_name = deployment_name
         self._hpa_name = hpa_name
-        self._cpu_request_m = cpu_request_millicores
+        self.cpu_request_millicores = cpu_request_millicores  # public: mutable by ClusterConfigManager
         self._initialized = False
 
     def _ensure_init(self) -> None:
@@ -92,7 +92,7 @@ class K8sMonitor:
                     cpu_cores = parse_cpu(container["usage"]["cpu"])
                     mem_mb = parse_memory(container["usage"]["memory"])
                     # CPU percent relative to request
-                    cpu_pct = (cpu_cores * 1000 / self._cpu_request_m) * 100
+                    cpu_pct = (cpu_cores * 1000 / self.cpu_request_millicores) * 100
                     pod_metrics_map[name] = (round(cpu_pct, 1), round(mem_mb, 1))
         except ApiException:
             pass  # metrics-server may not be ready

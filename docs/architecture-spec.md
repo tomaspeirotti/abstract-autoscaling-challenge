@@ -242,6 +242,21 @@ k = (pct/100) * (len - 1)
 result = data[floor(k)] * (ceil(k) - k) + data[ceil(k)] * (k - floor(k))
 ```
 
+#### 3.2.5 Module: `cluster_config.py` — Live Config Editor
+
+**Class: `ClusterConfigManager`**
+
+Exposes three operations over the HPA and Deployment:
+- `get_defaults()` — parses `k8s/hpa.yaml` and `k8s/deployment.yaml` with PyYAML; source of truth for the "initial" config.
+- `get_current()` — reads live HPA + Deployment via `AutoscalingV2Api` and `AppsV1Api`.
+- `apply(new_cfg)` — validates, patches HPA (`spec.minReplicas`, `spec.maxReplicas`, `spec.metrics[*].target.averageUtilization`), patches Deployment (`spec.template.spec.containers[0].resources.{requests,limits}.cpu`), updates `K8sMonitor.cpu_request_millicores`, and polls `read_namespaced_deployment_status` until the rolling restart completes (60s timeout).
+
+Validation rules:
+- Per-field ranges: min/max replicas, CPU/memory targets, CPU request/limit (see `_RANGES` in `cluster_config.py`).
+- Cross-field: `min_replicas ≤ max_replicas`, `cpu_request ≤ cpu_limit`.
+
+Server-side guard: `apply` and `reset` refuse to run while `load_generator.is_running` is true, returning `validation_error`. This mirrors the UI gating but cannot be bypassed from a custom WebSocket client.
+
 ### 3.3 Dashboard Frontend (`dashboard/static/`)
 
 A single-page application with no build step.
@@ -335,6 +350,9 @@ Single endpoint: `ws://{host}:{port}/ws`
 | `pause` | `{"action": "pause"}` | Stops load generator (cancels ticker, drains in-flight, closes client) |
 | `set_rps` | `{"action": "set_rps", "value": 100}` | Sets target RPS [1..500], clamped |
 | `set_url` | `{"action": "set_url", "value": "http://..."}` | Changes target URL for load generator |
+| `get_cluster_config` | `{"action": "get_cluster_config"}` | Returns `{type: "cluster_config", current, defaults}` |
+| `apply_cluster_config` | `{"action": "apply_cluster_config", "value": {<ClusterConfig>}}` | Validates, patches, returns `cluster_config_result` + refreshed `cluster_config` |
+| `reset_cluster_config` | `{"action": "reset_cluster_config"}` | Equivalent to `apply` with YAML defaults |
 
 ### 4.2 Server → Client Messages (every 1 second)
 
@@ -362,6 +380,27 @@ Single endpoint: `ws://{host}:{port}/ws`
       {"name": "python-api-ghi56", "cpu_percent": 58.7, "memory_mb": 95.0, "status": "Pending"}
     ]
   }
+}
+```
+
+**`cluster_config`** (on connect + after apply/reset):
+
+```json
+{
+  "type": "cluster_config",
+  "current": {"min_replicas": 1, "max_replicas": 10, "target_cpu_utilization": 50, "target_memory_utilization": 70, "cpu_request_millicores": 100, "cpu_limit_millicores": 500},
+  "defaults": {"min_replicas": 1, "max_replicas": 10, "target_cpu_utilization": 50, "target_memory_utilization": 70, "cpu_request_millicores": 100, "cpu_limit_millicores": 500}
+}
+```
+
+**`cluster_config_result`** (apply/reset response):
+
+```json
+{
+  "type": "cluster_config_result",
+  "status": "ok",
+  "error": null,
+  "restart_triggered": true
 }
 ```
 
